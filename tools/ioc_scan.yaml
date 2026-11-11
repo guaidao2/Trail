@@ -1,0 +1,12 @@
+name: "ioc_scan"
+command: "sh"
+args: ["-c", "echo \"=== IOC 清单（按需替换）===\"\nIOCS=\"\"\nif [ -z \"$IOCS\" ]; then echo \"no IOC provided; use host_exec with explicit values\"; fi\nfor ioc in $IOCS; do\n  echo \"--- $ioc ---\"\n  (ps -eo pid,user,args 2>/dev/null | grep -F \"$ioc\" | grep -v grep) || true\n  (ss -tunp 2>/dev/null | grep -F \"$ioc\") || true\n  (grep -rIlF \"$ioc\" /var/log 2>/dev/null | head -5) || true\n  (find / -xdev -type f -name \"*$ioc*\" 2>/dev/null | head -5) || true\ndone\n"]
+enabled: true
+short_description: "IOC 扫描：在进程/网络连接/文件/账户中匹配给定的 IOC 列表（只读）"
+description: |
+  把已知 IOC（IP、域名、文件哈希、进程名）在本机做一次全面匹配，用于告警落地核查。
+
+  **说明**：
+  - 本配方内置空 IOC 列表占位；实际使用时通过 host_exec 传入具体 IOC 做定向排查。
+  - 只读匹配，不修改系统。
+parameters: []

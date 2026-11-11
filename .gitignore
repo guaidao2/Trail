@@ -1,0 +1,86 @@
+# Runtime data
+data/
+chat_uploads/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Local configuration and secrets
+config.yaml
+config.local.yaml
+config.yaml.backup
+*.backup
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Upgrade / settings backups
+.upgrade-backup/
+
+# Eino runtime task board (under skills_dir)
+skills/.eino/
+
+# Build outputs
+trail
+trail.exe
+*.test
+bin/
+dist/
+build/
+.build/
+target/
+.gradle/
+coverage.out
+coverage.html
+
+# One-click update artifacts (internal/update): machine-local, written at the install root
+.update-lock
+.update-rollback-pending.json
+.update-rollback-pending.json.tmp
+.update-staging/
+.update-backup/
+.update-state.json
+.update-state.json.tmp
+.update-build-pending
+.update-build-pending.tmp
+trail.prev
+
+# Logs and temporary files
+/log/
+*.log
+*.bak
+*~
+tmp/
+temp/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Go
+/vendor/
+
+# Node / browser extension
+node_modules/
+
+# macOS / Windows / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# codegraph 索引（本地生成，不入库）
+.codegraph/
+
+# Local scratch (temporary scripts, never published)
+scratch/

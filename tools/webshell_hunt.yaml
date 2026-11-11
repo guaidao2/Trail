@@ -1,0 +1,18 @@
+name: "webshell_hunt"
+command: "sh"
+args: ["-c", "ROOTS=\"/var/www /usr/share/nginx/html /var/www/html\"\nfor root in $ROOTS; do\n  [ -d \"$root\" ] || continue\n  echo \"=== 扫描 $root ===\"\n  grep -rIlE --include='*.php' --include='*.jsp' --include='*.jspx' --include='*.asp' --include='*.aspx' --include='*.phtml' \\\n    '(eval[[:space:]]*\\(|assert[[:space:]]*\\(|system[[:space:]]*\\(|passthru[[:space:]]*\\(|shell_exec[[:space:]]*\\(|popen[[:space:]]*\\(|base64_decode[[:space:]]*\\(|gzinflate[[:space:]]*\\(|str_rot13[[:space:]]*\\(|Runtime\\.getRuntime\\(\\)\\.exec|ProcessBuilder|WScript\\.Shell)' \\\n    \"$root\" 2>/dev/null | head -40\n  echo \"--- 可疑文件哈希 ---\"\n  for f in $(grep -rIlE --include='*.php' --include='*.jsp' --include='*.aspx' '(eval[[:space:]]*\\(|assert[[:space:]]*\\(|base64_decode[[:space:]]*\\()' \"$root\" 2>/dev/null | head -20); do\n    md5sum \"$f\" 2>/dev/null || sha1sum \"$f\" 2>/dev/null\n  done\ndone\necho; echo \"=== 最近 7 天新增/修改的脚本文件 ===\"\nfind /var/www /usr/share/nginx/html /var/www/html -type f \\( -name '*.php' -o -name '*.jsp' -o -name '*.aspx' \\) -mtime -7 2>/dev/null | head -30\n"]
+enabled: true
+short_description: "WebShell 查杀：按危险函数/混淆特征扫描站点目录，列出可疑文件与命中片段（只读）"
+description: |
+  扫描 Web 根目录下的可疑脚本，定位一句话木马与混淆后门。
+
+  **检测特征**：
+  - PHP：`eval`、`assert`、`system`、`passthru`、`shell_exec`、`popen`、`base64_decode` 组合、`$_POST[...]` 直接执行
+  - JSP：`Runtime.getRuntime().exec`、`ProcessBuilder`
+  - ASP/ASPX：`eval`、`Execute(`、`Server.CreateObject("WScript.Shell")`
+  - 通用：超长单行、`gzinflate`/`str_rot13` 多层解码、文件时间与同目录其他文件差异大
+
+  **使用示例**：`webshell_hunt` 默认扫描 `/var/www`；其他站点根目录请用 host_exec 指定路径。
+
+  **说明**：只读扫描，不修改/删除文件；确认可疑后保留文件哈希与路径用于取证。
+parameters: []

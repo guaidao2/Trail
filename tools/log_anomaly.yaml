@@ -1,0 +1,15 @@
+name: "log_anomaly"
+command: "sh"
+args: ["-c", "echo \"=== 失败登录 Top10 ===\"\n(grep -hi \"failed password\" /var/log/auth.log /var/log/secure 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"from\") print $(i+1)}' | sort | uniq -c | sort -rn | head -10) || echo \"no auth log\"\necho; echo \"=== Web 404/403 Top10 来源 ===\"\n(awk '$9 ~ /^(404|403)$/ {print $1}' /var/log/nginx/access.log /var/log/apache2/access.log 2>/dev/null | sort | uniq -c | sort -rn | head -10) || echo \"no web log\"\necho; echo \"=== 扫描特征 URL ===\"\n(grep -hE \"(\\.env|/admin|wp-login|phpMyAdmin|/\\.git|/config\\.json)\" /var/log/nginx/access.log /var/log/apache2/access.log 2>/dev/null | tail -15) || echo none\necho; echo \"=== 系统服务异常 ===\"\n(journalctl -p err --since \"24 hours ago\" --no-pager 2>/dev/null | head -20) || (grep -iE \"error|fail\" /var/log/syslog 2>/dev/null | tail -15) || echo \"no journal/syslog readable\"\necho; echo \"=== 磁盘与 OOM ===\"\n(dmesg 2>/dev/null | grep -iE \"oom|out of memory|I/O error\" | tail -10) || echo \"dmesg not readable\"\n"]
+enabled: true
+short_description: "日志异常扫描：认证/Web/系统日志中的失败登录激增、扫描特征与错误风暴（只读）"
+description: |
+  对常见日志做一次异常聚合，适合日常巡检与事件初筛。
+
+  **检查内容**：
+  - 认证日志：失败登录来源 Top10、成功登录的非预期来源
+  - Web 日志：404/403 高频来源、可疑 UA、目录扫描特征（`.env`、`/admin`、`wp-login`）
+  - 系统日志：服务反复重启、OOM、磁盘错误
+
+  **说明**：只读；日志轮转后覆盖范围有限，需要更长窗口时用 journalctl 取。
+parameters: []
