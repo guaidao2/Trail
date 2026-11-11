@@ -1,0 +1,16 @@
+name: "login_audit"
+command: "sh"
+args: ["-c", "echo \"=== UID 0 账户 ===\"; awk -F: '$3==0 {print}' /etc/passwd\necho; echo \"=== 可登录账户（shell 非 nologin/false）===\"; awk -F: '$7 !~ /(nologin|false|sync|shutdown|halt)$/ {print $1\" UID=\"$3\" SHELL=\"$7}' /etc/passwd\necho; echo \"=== 无密码账户 ===\"; awk -F: '$2==\"\" {print $1}' /etc/shadow 2>/dev/null || echo \"shadow not readable\"\necho; echo \"=== 最近 10 次登录 ===\"; last -n 10 2>/dev/null || echo \"last unavailable\"\necho; echo \"=== 失败登录统计（Top10 来源）===\"; (grep -hi \"failed password\" /var/log/auth.log /var/log/secure 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i==\"from\") print $(i+1)}' | sort | uniq -c | sort -rn | head -10) || echo \"no auth log readable\"\necho; echo \"=== sudo 记录（最近 10 条）===\"; (grep -h \"sudo:\" /var/log/auth.log /var/log/secure 2>/dev/null | tail -10) || echo none\n"]
+enabled: true
+short_description: "登录与账户审计：UID 0 账户、可登录账户、最近登录/失败登录、sudo 使用痕迹（只读）"
+description: |
+  核对账户与登录痕迹，识别新增后门账户与暴力破解。
+
+  **判读要点**：
+  - UID 0 的非 root 账户、无密码账户、shell 为解释器的服务账户
+  - 近期新增或最近修改的账户
+  - 失败登录的来源 IP 与频次、成功登录的异常来源/时段
+  - sudo 提权记录
+
+  **说明**：日志路径因发行版不同（auth.log / secure），脚本会自动回退。
+parameters: []

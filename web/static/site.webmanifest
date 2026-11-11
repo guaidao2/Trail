@@ -1,0 +1,14 @@
+{
+  "name": "溯痕（CyberstrikeAI 蓝队版）",
+  "short_name": "溯痕 Trail",
+  "description": "面向服务器运维与蓝队安全运营的 AI 执行中枢：主机纳管、定期巡检、应急研判与可审计取证",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f8fafc",
+  "theme_color": "#0b1120",
+  "icons": [
+    { "src": "/static/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

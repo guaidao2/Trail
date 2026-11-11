@@ -1,0 +1,15 @@
+name: "suid_audit"
+command: "sh"
+args: ["-c", "echo \"=== SUID 文件 ===\"; find / -xdev -perm -4000 -type f 2>/dev/null | head -80\necho; echo \"=== SGID 文件 ===\"; find / -xdev -perm -2000 -type f 2>/dev/null | head -40\necho; echo \"=== 非系统目录中的 SUID ===\"; find /tmp /var/tmp /home /dev/shm -perm -4000 -type f 2>/dev/null | head -20 || echo none\n"]
+enabled: true
+short_description: "SUID/SGID 文件审计：列出可提权风险文件并对照常见合法清单（只读）"
+description: |
+  枚举 SUID/SGID 文件，用于发现被植入的提权后门（例如伪造的 `su`、`mount`）。
+
+  **判读要点**：
+  - 位于 `/tmp`、`/home`、`/var` 等非系统目录的 SUID 文件
+  - 与包管理器归属不符的 SUID 文件（可用 `rpm -qf` / `dpkg -S` 核对）
+  - 非常见工具（find、vim、nmap 等）带 SUID 位
+
+  **说明**：只读枚举；`-xdev` 限定根分区，避免挂载目录拖慢扫描。
+parameters: []

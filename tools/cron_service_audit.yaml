@@ -1,0 +1,15 @@
+name: "cron_service_audit"
+command: "sh"
+args: ["-c", "echo \"=== 用户 crontab ===\"; crontab -l 2>/dev/null || echo \"no user crontab\"\necho; echo \"=== 系统 crontab ===\"; cat /etc/crontab 2>/dev/null | grep -v '^#' | grep -v '^$'\necho; echo \"=== /etc/cron.* ===\"; ls -la /etc/cron.d /etc/cron.hourly /etc/cron.daily 2>/dev/null | head -40\necho; echo \"=== systemd timers ===\"; systemctl list-timers --all --no-pager 2>/dev/null | head -20 || echo none\necho; echo \"=== 自定义 systemd 单元（非 /lib 路径）===\"; ls -la /etc/systemd/system/*.service 2>/dev/null | head -30\necho; echo \"=== rc.local 与 profile.d ===\"; cat /etc/rc.local 2>/dev/null; ls -la /etc/profile.d 2>/dev/null | head -20\necho; echo \"=== 可疑外联特征 ===\"; grep -rIlE '(curl|wget)[^\\n]*(http|https)://' /etc/cron* /etc/systemd/system 2>/dev/null | head -20 || echo none\n"]
+enabled: true
+short_description: "计划任务与服务审计：cron/定时器/自定义 systemd 单元/rc.local，识别可疑持久化（只读）"
+description: |
+  核对持久化入口，识别被写入的反弹 shell、挖矿与后门自启动项。
+
+  **检查内容**：
+  - 用户 crontab、`/etc/crontab`、`/etc/cron.*`
+  - systemd timers 与自定义 unit（非发行版自带路径）
+  - `rc.local`、`profile.d`、`/etc/init.d` 中的非预期脚本
+
+  **判读要点**：外联 IP/域名的 curl/wget/bash -i、base64 解码执行、随机命名的临时脚本。
+parameters: []

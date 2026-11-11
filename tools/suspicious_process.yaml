@@ -1,0 +1,16 @@
+name: "suspicious_process"
+command: "sh"
+args: ["-c", "echo \"=== CPU / 内存 TOP ===\"; (ps -eo pid,ppid,user,pcpu,pmem,etime,args --sort=-pcpu 2>/dev/null | head -15) || ps aux | head -15\necho; echo \"=== 异常路径启动的进程 ===\"; (ps -eo pid,user,args 2>/dev/null | grep -E '(/tmp/|/dev/shm/|/var/tmp/)' | grep -v grep) || echo none\necho; echo \"=== 名称伪装检查（路径与名称不符）===\"; (ps -eo pid,args 2>/dev/null | grep -E '(kworker|kswapd|sshd|cron)' | grep -Ev '^\\s*[0-9]+\\s+\\[|/usr/sbin/|/usr/bin/|sshd:' ) || echo none\necho; echo \"=== 孤儿进程（ppid=1 且非系统服务）===\"; (ps -eo pid,ppid,user,args 2>/dev/null | awk '$2==1 && $3!=\"root\"' | head -20) || true\necho; echo \"=== 监听与连接 ===\"; (ss -tunp 2>/dev/null | head -25) || (netstat -tunp 2>/dev/null | head -25) || echo \"no ss/netstat\"\n"]
+enabled: true
+short_description: "异常进程排查：高 CPU/内存、异常路径启动、伪装系统名、无主进程与内核线程对照（只读）"
+description: |
+  列出可疑进程线索，帮助判断是否被植入挖矿、后门或 webshell 派生的 shell。
+
+  **判读要点**：
+  - 从 `/tmp`、`/dev/shm`、`/var/tmp` 启动的进程
+  - 名称伪装成 `kworker`、`sshd` 等但路径异常
+  - 高 CPU 占用（挖矿特征）、父进程已退出的孤儿进程
+  - 网络连接与进程的对应关系（需要 ss/netstat）
+
+  **说明**：只读命令；发现可疑项后可用 host_download 取证对应可执行文件。
+parameters: []

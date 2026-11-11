@@ -1,0 +1,29 @@
+溯痕（Trail / CyberstrikeAI-Blue）
+Copyright 2026 guaidao2 & coolmoon
+
+This product is a modified version of CyberStrikeAI
+(https://github.com/Ed1s0nZ/CyberStrikeAI, mirror:
+https://github.com/AIPentest/CyberStrikeAI), Copyright 公明 / Ed1s0nZ,
+licensed under the Apache License, Version 2.0.
+
+本产物基于 CyberStrikeAI（作者：公明 / Ed1s0nZ）修改而来，沿用 Apache-2.0 许可。
+
+Modifications / 修改说明
+------------------------
+- 移除红队面：内置 C2、WebShell 管理、项目（projects）与攻击链（attack chain）
+  层、以及 42 个攻击性工具配方；相关数据库表、RBAC 权限、i18n 文案、文档与
+  前端页面同步删除。
+- 新增主机纳管：hosts 表、SSH/Telnet 远程执行与文件传输、凭据 AES-256-GCM
+  加密存储、主机密钥 TOFU 固定与校验、host_* MCP 工具与 REST 接口。
+- 新增蓝队巡检：host_inspect 九项只读检查、八个巡检配方（tools/*.yaml）、
+  按主机建立 cron 巡检计划并产出带证据的报告。
+- 角色与知识体系改造：11 个子代理、12 个角色、9 个 playbook 与 4 篇蓝队知识
+  文档；HITL 判定提示词改为运维与应急响应口径。
+- 品牌与发布整理：更名 溯痕（Trail），新增 SVG 标识，版本号 v1.0.0，README
+  与 CHANGELOG 重写。
+
+License
+-------
+Apache License, Version 2.0 — see LICENSE for the full text.
+Apache-2.0 §4 requires retaining this NOTICE and the license when redistributing
+this work or a derivative of it.

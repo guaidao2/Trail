@@ -1,0 +1,20 @@
+name: "baseline_check"
+command: "sh"
+args: ["-c", "echo \"=== 发行版与内核 ===\"; cat /etc/os-release 2>/dev/null | head -4; uname -srm; uptime\necho; echo \"=== 包与更新 ===\"\n(apt list --upgradable 2>/dev/null | grep -c upgradable) 2>/dev/null || true\n(rpm -qa 2>/dev/null | wc -l) || true\necho; echo \"=== 时间同步 ===\"; (timedatectl 2>/dev/null | head -6) || (chronyc tracking 2>/dev/null) || echo \"no time sync tooling readable\"\necho; echo \"=== 强制访问控制 ===\"; (getenforce 2>/dev/null) || (aa-status 2>/dev/null | head -3) || echo \"no MAC tooling readable\"\necho; echo \"=== SSH 关键项 ===\"; grep -Ei '^(PermitRootLogin|PasswordAuthentication|Port|PermitEmptyPasswords)' /etc/ssh/sshd_config 2>/dev/null || echo \"sshd_config not readable\"\necho; echo \"=== 防火墙 ===\"; (systemctl is-active firewalld 2>/dev/null); (ufw status 2>/dev/null | head -3); (nft list ruleset 2>/dev/null | head -5)\n"]
+enabled: true
+short_description: "系统基线核查：发行版/内核、补丁与更新、时间同步、SELinux/AppArmor、SSH 关键配置（只读）"
+description: |
+  对**本机**（Agent 所在主机）做基线核查，用于日常体检与合规留证。
+
+  **检查内容**：
+  - 发行版、内核版本、运行时长
+  - 已安装包数量、可升级包数量（可用时）
+  - 时间同步状态（timedatectl / chrony / ntpd）
+  - 强制访问控制状态（SELinux / AppArmor）
+  - SSH 关键安全项：PermitRootLogin、PasswordAuthentication、Port
+  - 防火墙状态（firewalld / ufw / nftables 之一）
+
+  **说明**：
+  - 全程只读，不修改任何配置。
+  - 检查远端主机请改用 host_inspect 或 host_exec。
+parameters: []
