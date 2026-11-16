@@ -423,6 +423,7 @@ const PAGE_PERMISSION_MAP = {
     vulnerabilities: 'vulnerability:read',
     'chat-files': 'files:read',
     hosts: 'host:read',
+    ioc: 'ioc:read',
     mcp: 'mcp:read',
     'mcp-monitor': 'monitor:read',
     'mcp-management': 'mcp:read',

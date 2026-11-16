@@ -1055,6 +1055,11 @@ func setupRoutes(
 		protected.GET("/hosts/:id/findings", hostHandler.ListFindings)
 		protected.GET("/hosts/:id/findings/summary", hostHandler.FindingSummary)
 		protected.PATCH("/findings/:id/status", security.RequirePermission("host:write"), hostHandler.UpdateFindingStatus)
+		protected.GET("/ioc", hostHandler.ListIOC)
+		protected.POST("/ioc", hostHandler.UpsertIOC)
+		protected.GET("/ioc/:id", hostHandler.GetIOC)
+		protected.PATCH("/ioc/:id/status", hostHandler.UpdateIOCStatus)
+		protected.DELETE("/ioc/:id", hostHandler.DeleteIOC)
 
 		// 批量任务管理
 		protected.POST("/batch-tasks", agentHandler.CreateBatchQueue)

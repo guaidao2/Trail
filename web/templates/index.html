@@ -298,6 +298,16 @@
                             <span data-i18n="nav.hosts">主机管理</span>
                         </div>
                     </div>
+                    <div class="nav-item" data-page="ioc">
+                        <div class="nav-item-content" data-title="IOC 情报" onclick="switchPage('ioc')" data-i18n="ioc.title" data-i18n-attr="data-title" data-i18n-skip-text="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="7"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                <line x1="8" y1="11" x2="14" y2="11"></line>
+                            </svg>
+                            <span data-i18n="ioc.title">IOC 情报</span>
+                        </div>
+                    </div>
                     <div class="nav-section-label" role="presentation">
                         <span data-i18n="navGroups.capabilities">能力中心</span>
                     </div>
@@ -2306,7 +2316,73 @@
                     </div>
                 </div>
 
-                <!-- 主机管理页面 -->
+                <!-- IOC 情报页面 -->
+                <div id="page-ioc" class="page">
+                    <div class="page-header">
+                        <h2 data-i18n="ioc.title">IOC 情报</h2>
+                        <div class="page-header-actions">
+                            <button class="btn-primary" data-require-permission="ioc:write" onclick="openIOCEditor()" data-i18n="ioc.add">新增情报</button>
+                            <button class="btn-secondary" onclick="loadIOC()" data-i18n="common.refresh">刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-content ioc-page-content">
+                        <div class="ioc-summary">
+                            <span class="ioc-summary-title" data-i18n="ioc.overview">情报概览</span>
+                            <div id="ioc-status-summary" class="ioc-status-summary"></div>
+                        </div>
+                        <div class="batch-queues-filters tasks-filters batch-queues-filters--compact ioc-filters">
+                            <label>
+                                <span data-i18n="ioc.searchLabel">搜索</span>
+                                <input type="text" id="ioc-search" data-i18n="ioc.searchPlaceholder" data-i18n-attr="placeholder" placeholder="值 / 备注 / 标签" oninput="loadIOC()" />
+                            </label>
+                            <label>
+                                <span data-i18n="ioc.statusLabel">状态</span>
+                                <select id="ioc-status-filter" onchange="loadIOC()">
+                                    <option value="" data-i18n="ioc.all">全部</option>
+                                    <option value="observed" data-i18n="ioc.statusObserved">观察</option>
+                                    <option value="confirmed" data-i18n="ioc.statusConfirmed">已确认</option>
+                                    <option value="blocked" data-i18n="ioc.statusBlocked">已封禁</option>
+                                    <option value="false_positive" data-i18n="ioc.statusFalsePositive">误报</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span data-i18n="ioc.typeLabel">类型</span>
+                                <select id="ioc-type-filter" onchange="loadIOC()">
+                                    <option value="" data-i18n="ioc.all">全部</option>
+                                    <option value="ip">ip</option>
+                                    <option value="domain">domain</option>
+                                    <option value="url">url</option>
+                                    <option value="md5">md5</option>
+                                    <option value="sha1">sha1</option>
+                                    <option value="sha256">sha256</option>
+                                    <option value="email">email</option>
+                                    <option value="filename">filename</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="table-container ioc-table-card">
+                            <table class="data-table ioc-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="ioc.colValue">值</th>
+                                        <th data-i18n="ioc.colType">类型</th>
+                                        <th data-i18n="ioc.colStatus">状态</th>
+                                        <th data-i18n="ioc.colSeverity">严重度</th>
+                                        <th data-i18n="ioc.colConfidence">置信度</th>
+                                        <th data-i18n="ioc.colHosts">命中主机</th>
+                                        <th data-i18n="ioc.colHits">命中次数</th>
+                                        <th data-i18n="ioc.colLastSeen">最近出现</th>
+                                        <th data-i18n="ioc.colActions">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ioc-body">
+                                    <tr class="is-empty-row ioc-table-state-row"><td colspan="9" data-i18n="common.loading">加载中…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="ioc-detail" class="ioc-detail" style="display:none;"></div>
+                    </div>
+                </div>
                 <div id="page-hosts" class="page">
                     <div class="page-header">
                         <h2 data-i18n="hosts.title">主机管理</h2>
@@ -5714,6 +5790,70 @@
 </html>
 
     <!-- 主机检测发现弹窗（日志命中 + 基线不符合项） -->
+    <!-- IOC 新增 / 更新情报弹窗 -->
+    <div id="ioc-edit-modal" class="modal">
+        <div class="modal-content" style="max-width: 760px;">
+            <div class="modal-header">
+                <h2 data-i18n="ioc.editorToggle">新增 / 更新情报</h2>
+                <span class="modal-close" onclick="closeIOCEditor()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="ioc-form ioc-editor-form">
+                    <label class="ioc-form-field ioc-form-field--value">
+                        <span class="ioc-form-label" data-i18n="ioc.fieldValue">值</span>
+                        <input type="text" id="ioc-form-value" placeholder="1.2.3.4 / evil.example.com" />
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--type">
+                        <span class="ioc-form-label" data-i18n="ioc.fieldType">类型</span>
+                        <select id="ioc-form-type">
+                            <option value="ip">ip</option>
+                            <option value="domain">domain</option>
+                            <option value="url">url</option>
+                            <option value="md5">md5</option>
+                            <option value="sha1">sha1</option>
+                            <option value="sha256">sha256</option>
+                            <option value="email">email</option>
+                            <option value="filename">filename</option>
+                        </select>
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--status">
+                        <span class="ioc-form-label" data-i18n="ioc.fieldStatus">状态</span>
+                        <select id="ioc-form-status">
+                            <option value="observed" data-i18n="ioc.statusObserved">观察</option>
+                            <option value="confirmed" data-i18n="ioc.statusConfirmed">已确认</option>
+                            <option value="false_positive" data-i18n="ioc.statusFalsePositive">误报</option>
+                        </select>
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--severity">
+                        <span class="ioc-form-label" data-i18n="ioc.fieldSeverity">严重度</span>
+                        <select id="ioc-form-severity">
+                            <option value="critical">critical</option>
+                            <option value="high">high</option>
+                            <option value="medium" selected>medium</option>
+                            <option value="low">low</option>
+                            <option value="info">info</option>
+                        </select>
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--confidence">
+                        <span class="ioc-form-label" data-i18n="ioc.fieldConfidence">置信度</span>
+                        <input type="number" id="ioc-form-confidence" value="50" min="0" max="100" />
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--note">
+                        <span class="ioc-form-label" data-i18n="ioc.fieldNote">备注</span>
+                        <input type="text" id="ioc-form-note" data-i18n="ioc.notePlaceholder" data-i18n-attr="placeholder" placeholder="来源与判断依据" />
+                    </label>
+                </div>
+                <p class="page-hint ioc-form-hint" data-i18n="ioc.hint">
+                    状态只升不降：观察 → 已确认 → 已封禁；误报是终态。封禁/解封需要真正在主机上执行命令，请让 Agent 调用 ioc_block / ioc_unblock。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeIOCEditor()" data-i18n="common.cancel">取消</button>
+                <button class="btn-primary ioc-form-save" data-require-permission="ioc:write" onclick="saveIOC()" data-i18n="ioc.save">保存</button>
+            </div>
+        </div>
+    </div>
+
     <div id="host-findings-modal" class="modal">
         <div class="modal-content" style="max-width: 980px;">
             <div class="modal-header">
@@ -5877,6 +6017,7 @@
 
 
     <script src="/static/js/hosts.js?v=20261110-hosts"></script>
+    <script src="/static/js/ioc.js?v=20261116-ioc"></script>
     <!-- 移动端交互层：必须最后加载，它包装 window.switchPage 并注入移动端 DOM -->
 </body>
 </html>

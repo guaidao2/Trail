@@ -166,6 +166,11 @@ func permissionForRequest(method, fullPath string) string {
 		return "asset:delete"
 	case strings.HasPrefix(path, "/assets"):
 		return crudPermission(method, "asset")
+	case strings.HasPrefix(path, "/ioc"):
+		if method != "GET" {
+			return "ioc:write"
+		}
+		return "ioc:read"
 	case strings.HasPrefix(path, "/findings"):
 		// 发现的状态流转属于主机写的延伸；查询跟随主机读。
 		if method != "GET" {
