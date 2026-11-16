@@ -5885,6 +5885,34 @@
         </div>
     </div>
 
+    <!-- 主机巡检计划弹窗（cron 调度，跑 probe → inspect → log_scan → baseline_audit） -->
+    <div id="host-schedule-modal" class="modal">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header">
+                <h2 id="host-schedule-title" data-i18n="hosts.scheduleTitle">巡检计划</h2>
+                <span class="modal-close" onclick="closeHostSchedule()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="host-schedule-cron" data-i18n="hosts.cronLabel">cron 表达式</label>
+                    <input type="text" id="host-schedule-cron" placeholder="0 3 * * *" autocomplete="off" />
+                    <p class="page-hint" data-i18n="hosts.cronHint">五段式 cron，例如 <code>0 3 * * *</code> 表示每天 03:00；<code>0 */6 * * *</code> 表示每 6 小时。</p>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="host-schedule-execute-now" checked />
+                        <span data-i18n="hosts.executeNow">保存后立即执行一次</span>
+                    </label>
+                </div>
+                <p class="page-hint" data-i18n="hosts.scheduleHint">每轮巡检会依次执行：连通性探测 → 基础巡检 → 日志攻击检测 → 基线合规核查；检测命中会自动落库到该主机的「发现」，日志来源 IP 会写成观察态 IOC 候选。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeHostSchedule()" data-i18n="common.cancel">取消</button>
+                <button class="btn-primary" data-require-permission="host:write" onclick="saveHostSchedule()" data-i18n="ioc.save">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 主机纳管编辑弹窗 -->
     <div id="host-modal" class="modal">
         <div class="modal-content" style="max-width: 680px;">

@@ -81,6 +81,7 @@
             '<td>' + lastCheck + '</td>' +
             '<td class="host-actions">' +
             '<button class="btn-secondary btn-sm" data-require-permission="host:read" onclick="openHostFindings(\'' + esc(h.id) + '\')">' + esc(tt('hosts.findings', '发现')) + '</button> ' +
+            '<button class="btn-secondary btn-sm" data-require-permission="host:write" onclick="openHostSchedule(\'' + esc(h.id) + '\')">' + esc(tt('hosts.schedule', '巡检计划')) + '</button> ' +
             '<button class="btn-secondary btn-sm" data-require-permission="host:read" onclick="probeHost(\'' + esc(h.id) + '\')">' + esc(tt('hosts.probe', '探测')) + '</button> ' +
             '<button class="btn-secondary btn-sm" data-require-permission="host:exec" onclick="openHostTerminal(\'' + esc(h.id) + '\')">' + esc(tt('hosts.terminal', '终端')) + '</button> ' +
             '<button class="btn-secondary btn-sm" data-require-permission="host:write" onclick="showHostModal(\'' + esc(h.id) + '\')">' + esc(tt('common.edit', '编辑')) + '</button> ' +
@@ -394,6 +395,51 @@
         }
     }
 
+    // ---- 主机巡检计划（cron 调度）----
+    let currentScheduleHostId = '';
+
+    function openHostSchedule(id) {
+        currentScheduleHostId = id;
+        const cron = el('host-schedule-cron');
+        if (cron) cron.value = '';
+        const now = el('host-schedule-execute-now');
+        if (now) now.checked = true;
+        const modal = el('host-schedule-modal');
+        if (modal) modal.style.display = 'flex';
+        if (cron && typeof cron.focus === 'function') cron.focus();
+    }
+
+    function closeHostSchedule() {
+        const modal = el('host-schedule-modal');
+        if (modal) modal.style.display = 'none';
+        currentScheduleHostId = '';
+    }
+
+    async function saveHostSchedule() {
+        const cron = el('host-schedule-cron') ? el('host-schedule-cron').value.trim() : '';
+        if (!cron) {
+            if (typeof showNotification === 'function') showNotification(tt('hosts.cronRequired', 'cron 表达式不能为空'), 'error');
+            return;
+        }
+        const executeNow = !!(el('host-schedule-execute-now') && el('host-schedule-execute-now').checked);
+        try {
+            await apiFetchJSON('/api/hosts/' + encodeURIComponent(currentScheduleHostId) + '/inspection-schedule', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cron: cron, execute_now: executeNow }),
+            });
+            closeHostSchedule();
+            if (typeof showNotification === 'function') {
+                showNotification(tt('hosts.scheduleSaved', '巡检计划已保存'), 'success');
+            }
+        } catch (err) {
+            if (typeof showNotification === 'function') showNotification(err.message, 'error');
+        }
+    }
+
+    window.openHostSchedule = openHostSchedule;
+    window.closeHostSchedule = closeHostSchedule;
+    window.saveHostSchedule = saveHostSchedule;
     window.openHostFindings = openHostFindings;
     window.closeHostFindings = closeHostFindings;
     window.setFindingStatus = setFindingStatus;

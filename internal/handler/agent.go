@@ -2414,7 +2414,7 @@ func (h *AgentHandler) ScheduleHostInspection(host *database.Host, cronExpr, own
 	return queue.ID, nil
 }
 
-// hostInspectionPrompt 生成巡检任务的指令文本（只读取证 + 报告要求）。
+// hostInspectionPrompt 生成巡检任务的指令文本（只读取证 + 检测 + 报告要求）。
 func hostInspectionPrompt(host *database.Host) string {
 	name := strings.TrimSpace(host.Name)
 	if name == "" {
@@ -2424,13 +2424,17 @@ func hostInspectionPrompt(host *database.Host) string {
 
 步骤：
 1. 用 host_probe 确认连通性；若离线，直接输出"主机离线 + 错误原因"并结束。
-2. 用 host_inspect 执行全量巡检（system/load/disk/users/ports/logins/cron/suid/last）。
-3. 对发现的异常项，用 host_download 或 host_exec 取补充证据（配置文件、日志片段、进程详情）。
+2. 用 host_inspect 执行全量基础巡检（system/load/disk/users/ports/logins/cron/suid/last）。
+3. 用 host_log_scan 扫描日志里的攻击载荷与入侵痕迹（不传 path，让它自动探测常见日志；命中会按主机落库，来源 IP 会写成观察态 IOC 候选）。
+4. 用 host_baseline_audit 执行全量基线核查（身份鉴别/访问控制/SUID/安全审计/入侵防范/系统加固/提权路径）；标为"需要 root"的项不算合规，也不要在报告里当成问题。
+5. 对发现的异常项，用 host_download 或 host_exec 取补充证据（配置文件、日志片段、进程详情）。
 
 输出要求：
-- 按检查项分组，每条异常给出：现象 → 证据（命令与输出片段）→ 影响判断 → 建议动作。
-- 无异常的检查项写"已检查，无异常"，便于留证。
-- 结尾给一行总体结论（正常 / 存在中低风险 / 存在高风险）。
+- 先给一段总体结论（正常 / 存在中低风险 / 存在高风险），再分组展开。
+- 基础巡检：按检查项分组，无异常的项写"已检查，无异常"，便于留证。
+- 日志检测：按严重度列出命中（规则、来源 IP、证据行），并说明哪些是解码后才命中的。
+- 基线核查：只列"不符合"的项，附检查 ID、条款与整改建议；"需要 root / 需人工"的项单独归到"未能判定"。
+- 每条异常给出：现象 → 证据（命令与输出片段）→ 影响判断 → 建议动作。
 - 不要臆造输出；读不到的项说明原因。`,
 		name, host.ID, host.Address, host.Port)
 }
