@@ -39842,3 +39842,27 @@ html[data-theme="dark"] .ioc-detail > h3 small {
         gap: 4px 6px;
     }
 }
+
+
+/* IOC 行内详情：复用漏洞页卡片结构，但表格单元格默认居中，这里改回左对齐 */
+.ioc-detail-row > td {
+    padding: 0;
+    text-align: left;
+    background: transparent;
+}
+
+.ioc-detail-row .vulnerability-content {
+    padding: 14px 16px;
+    text-align: left;
+}
+
+.ioc-detail-row .vulnerability-details,
+.ioc-detail-row .vuln-detail-field {
+    text-align: left;
+}
+
+.ioc-detail-row .vulnerability-section strong {
+    display: block;
+    margin-bottom: 8px;
+    text-align: left;
+}

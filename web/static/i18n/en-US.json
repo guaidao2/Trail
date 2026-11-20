@@ -4149,7 +4149,13 @@
     "empty": "No indicators yet",
     "detailNoHosts": "No host hits yet",
     "loading": "Loading…",
-    "deleteConfirm": "Delete this indicator and its host hits?"
+    "deleteConfirm": "Delete this indicator and its host hits?",
+    "colHostCount": "Hosts / hits",
+    "colHost": "Host",
+    "colSource": "Source",
+    "colRule": "Rule",
+    "detailHosts": "Host hits and handling",
+    "actionUndo": "Undo command"
   },
   "memory": {
     "title": "Memory",

@@ -105,33 +105,56 @@
     let expandedIocId = '';
     const iocDetailCache = {};
 
+    function detailField(label, valueHtml) {
+        if (!valueHtml) return '';
+        return '<div class="vuln-detail-field">'
+            + '<div class="vuln-detail-field__label">' + esc(label) + '</div>'
+            + '<div class="vuln-detail-field__row">' + valueHtml + '</div>'
+            + '</div>';
+    }
+
     function renderDetailRow(id) {
         const detail = iocDetailCache[id];
-        const rows = detail && detail.hosts && detail.hosts.length
-            ? detail.hosts.map(function (h) {
-                return '<tr><td>' + esc(h.host_id) + '</td>'
+        if (!detail) {
+            return '<tr class="ioc-detail-row"><td colspan="9">' + esc(tt('ioc.loading', '加载中…')) + '</td></tr>';
+        }
+        const rec = detail.ioc || {};
+        const hosts = detail.hosts || [];
+        const hostRows = hosts.length
+            ? hosts.map(function (h) {
+                return '<tr><td><code>' + esc(h.host_id) + '</code></td>'
                     + '<td>' + esc(h.source || '-') + '</td>'
                     + '<td><code>' + esc(h.rule_id || '-') + '</code></td>'
                     + '<td>' + esc(String(h.hit_count)) + '</td>'
                     + '<td>' + esc(fmtTime(h.last_seen)) + '</td>'
-                    + '<td>' + (h.blocked_at ? esc(tt('ioc.statusBlocked', '已封禁')) + ' ' + esc(fmtTime(h.blocked_at)) : '-') + '</td>'
+                    + '<td>' + (h.blocked_at ? esc(tt('ioc.statusBlocked', '已封禁')) + ' · ' + esc(fmtTime(h.blocked_at)) : '-') + '</td>'
                     + '<td><code>' + esc(h.unblock_command || '-') + '</code></td></tr>';
             }).join('')
             : '<tr><td colspan="7">' + esc(tt('ioc.detailNoHosts', '还没有命中记录')) + '</td></tr>';
+        const fields = detailField(tt('ioc.colValue', '值'), '<code class="vuln-detail-field-value">' + esc(rec.value || '') + '</code>')
+            + detailField(tt('ioc.colType', '类型'), '<span class="vuln-detail-field-value">' + esc(rec.type || '-') + '</span>')
+            + detailField(tt('ioc.colStatus', '状态'), statusBadge(rec.status))
+            + detailField(tt('ioc.colSeverity', '严重度'), severityBadge(rec.severity))
+            + detailField(tt('ioc.colConfidence', '置信度'), '<span class="vuln-detail-field-value">' + esc(String(rec.confidence || 0)) + '</span>')
+            + detailField(tt('ioc.colHostCount', '命中主机'), '<span class="vuln-detail-field-value">' + esc(String(rec.host_count || 0)) + ' / ' + esc(String(rec.hit_count || 0)) + '</span>')
+            + detailField(tt('ioc.colLastSeen', '最近出现'), '<span class="vuln-detail-field-value">' + esc(fmtTime(rec.last_seen)) + '</span>');
         return '<tr class="ioc-detail-row"><td colspan="9">'
-            + (detail ? '' : esc(tt('ioc.loading', '加载中…')))
-            + (detail ? '<div class="table-container"><table class="data-table"><thead><tr>'
-                + '<th>' + esc(tt('hosts.title', '主机')) + '</th>'
-                + '<th>' + esc(tt('hosts.findingSource', '来源')) + '</th>'
-                + '<th>' + esc(tt('hosts.findingRule', '规则')) + '</th>'
-                + '<th>' + esc(tt('ioc.colHits', '命中次数')) + '</th>'
-                + '<th>' + esc(tt('ioc.colLastSeen', '最近出现')) + '</th>'
-                + '<th>' + esc(tt('ioc.colStatus', '状态')) + '</th>'
-                + '<th>' + esc(tt('ioc.actionUndo', '撤销命令')) + '</th>'
-                + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
-                + (detail.ioc && detail.ioc.note ? '<p class="page-hint">' + esc(detail.ioc.note) + '</p>' : '')
-                : '')
-            + '</td></tr>';
+            + '<div class="vulnerability-content" style="display:block;">'
+            + (rec.note ? '<div class="vulnerability-description">' + esc(rec.note) + '</div>' : '')
+            + '<div class="vulnerability-details">' + fields + '</div>'
+            + '<div class="vulnerability-repro"><section class="vulnerability-section">'
+            + '<strong>' + esc(tt('ioc.detailHosts', '命中主机与处置')) + '</strong>'
+            + '<div class="table-container"><table class="data-table"><thead><tr>'
+            + '<th>' + esc(tt('ioc.colHost', '主机')) + '</th>'
+            + '<th>' + esc(tt('ioc.colSource', '来源')) + '</th>'
+            + '<th>' + esc(tt('ioc.colRule', '规则')) + '</th>'
+            + '<th>' + esc(tt('ioc.colHits', '命中次数')) + '</th>'
+            + '<th>' + esc(tt('ioc.colLastSeen', '最近出现')) + '</th>'
+            + '<th>' + esc(tt('ioc.colStatus', '状态')) + '</th>'
+            + '<th>' + esc(tt('ioc.actionUndo', '撤销命令')) + '</th>'
+            + '</tr></thead><tbody>' + hostRows + '</tbody></table></div>'
+            + '</section></div>'
+            + '</div></td></tr>';
     }
 
     function renderList(items) {

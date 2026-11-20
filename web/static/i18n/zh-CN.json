@@ -4138,7 +4138,13 @@
     "empty": "暂无情报",
     "detailNoHosts": "还没有命中记录",
     "loading": "加载中…",
-    "deleteConfirm": "删除这条情报及其命中记录？"
+    "deleteConfirm": "删除这条情报及其命中记录？",
+    "colHostCount": "命中主机 / 次数",
+    "colHost": "主机",
+    "colSource": "来源",
+    "colRule": "规则",
+    "detailHosts": "命中主机与处置",
+    "actionUndo": "撤销命令"
   },
   "memory": {
     "title": "记忆",
