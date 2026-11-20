@@ -166,6 +166,11 @@ func permissionForRequest(method, fullPath string) string {
 		return "asset:delete"
 	case strings.HasPrefix(path, "/assets"):
 		return crudPermission(method, "asset")
+	case strings.HasPrefix(path, "/memory"):
+		if method != "GET" {
+			return "memory:write"
+		}
+		return "memory:read"
 	case strings.HasPrefix(path, "/ioc"):
 		if method != "GET" {
 			return "ioc:write"

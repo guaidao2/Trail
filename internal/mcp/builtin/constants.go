@@ -36,6 +36,12 @@ const (
 	ToolIOCBlock     = "ioc_block"
 	ToolIOCUnblock   = "ioc_unblock"
 
+	// 记忆工具（关键 / 长期 / 短期三级）
+	ToolMemorySave   = "memory_save"
+	ToolMemorySearch = "memory_search"
+	ToolMemoryList   = "memory_list"
+	ToolMemoryForget = "memory_forget"
+
 	// 知识库工具
 	ToolListKnowledgeRiskTypes = "list_knowledge_risk_types"
 	ToolSearchKnowledgeBase    = "search_knowledge_base"
@@ -86,6 +92,10 @@ func IsBuiltinTool(toolName string) bool {
 		ToolIOCRecordHit,
 		ToolIOCBlock,
 		ToolIOCUnblock,
+		ToolMemorySave,
+		ToolMemorySearch,
+		ToolMemoryList,
+		ToolMemoryForget,
 		ToolCreateAsset,
 		ToolGetAsset,
 		ToolQueryAssets,
@@ -139,6 +149,10 @@ func GetAllBuiltinTools() []string {
 		ToolIOCRecordHit,
 		ToolIOCBlock,
 		ToolIOCUnblock,
+		ToolMemorySave,
+		ToolMemorySearch,
+		ToolMemoryList,
+		ToolMemoryForget,
 		ToolCreateAsset,
 		ToolGetAsset,
 		ToolQueryAssets,

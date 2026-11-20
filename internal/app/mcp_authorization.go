@@ -116,6 +116,10 @@ func mcpToolAuthorizer(db *database.DB) func(context.Context, string, map[string
 		case builtin.ToolHostList, builtin.ToolHostGet, builtin.ToolHostProbe, builtin.ToolHostInspect,
 		builtin.ToolHostLogScan, builtin.ToolHostBaselineAudit:
 			return require("host:read")
+		case builtin.ToolMemorySearch, builtin.ToolMemoryList:
+			return require("memory:read")
+		case builtin.ToolMemorySave, builtin.ToolMemoryForget:
+			return require("memory:write")
 		case builtin.ToolIOCLookup, builtin.ToolIOCList:
 			return require("ioc:read")
 		case builtin.ToolIOCUpsert, builtin.ToolIOCRecordHit:

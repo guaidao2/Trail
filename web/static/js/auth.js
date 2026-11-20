@@ -424,6 +424,7 @@ const PAGE_PERMISSION_MAP = {
     'chat-files': 'files:read',
     hosts: 'host:read',
     ioc: 'ioc:read',
+    memory: 'memory:read',
     mcp: 'mcp:read',
     'mcp-monitor': 'monitor:read',
     'mcp-management': 'mcp:read',

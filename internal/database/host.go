@@ -130,6 +130,10 @@ func (db *DB) CreateHost(h *Host) (*Host, error) {
 	if authType != "password" && authType != "key" {
 		return nil, fmt.Errorf("不支持的认证方式: %s", authType)
 	}
+	// Telnet 协议只有明文口令这一种认证方式，私钥没有意义。
+	if protocol == "telnet" && authType == "key" {
+		return nil, fmt.Errorf("Telnet 不支持私钥认证，请改用密码")
+	}
 	name := strings.TrimSpace(h.Name)
 	if name == "" {
 		name = address
@@ -178,6 +182,10 @@ func (db *DB) UpdateHost(h *Host) (*Host, error) {
 	authType := strings.ToLower(strings.TrimSpace(h.AuthType))
 	if authType == "" {
 		authType = existing.AuthType
+	}
+	// Telnet 协议只有明文口令这一种认证方式，私钥没有意义。
+	if protocol == "telnet" && authType == "key" {
+		return nil, fmt.Errorf("Telnet 不支持私钥认证，请改用密码")
 	}
 	port := h.Port
 	if port <= 0 {

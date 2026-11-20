@@ -102,6 +102,38 @@
             + (parts.length ? '　' + parts.join('　') : '');
     }
 
+    let expandedIocId = '';
+    const iocDetailCache = {};
+
+    function renderDetailRow(id) {
+        const detail = iocDetailCache[id];
+        const rows = detail && detail.hosts && detail.hosts.length
+            ? detail.hosts.map(function (h) {
+                return '<tr><td>' + esc(h.host_id) + '</td>'
+                    + '<td>' + esc(h.source || '-') + '</td>'
+                    + '<td><code>' + esc(h.rule_id || '-') + '</code></td>'
+                    + '<td>' + esc(String(h.hit_count)) + '</td>'
+                    + '<td>' + esc(fmtTime(h.last_seen)) + '</td>'
+                    + '<td>' + (h.blocked_at ? esc(tt('ioc.statusBlocked', '已封禁')) + ' ' + esc(fmtTime(h.blocked_at)) : '-') + '</td>'
+                    + '<td><code>' + esc(h.unblock_command || '-') + '</code></td></tr>';
+            }).join('')
+            : '<tr><td colspan="7">' + esc(tt('ioc.detailNoHosts', '还没有命中记录')) + '</td></tr>';
+        return '<tr class="ioc-detail-row"><td colspan="9">'
+            + (detail ? '' : esc(tt('ioc.loading', '加载中…')))
+            + (detail ? '<div class="table-container"><table class="data-table"><thead><tr>'
+                + '<th>' + esc(tt('hosts.title', '主机')) + '</th>'
+                + '<th>' + esc(tt('hosts.findingSource', '来源')) + '</th>'
+                + '<th>' + esc(tt('hosts.findingRule', '规则')) + '</th>'
+                + '<th>' + esc(tt('ioc.colHits', '命中次数')) + '</th>'
+                + '<th>' + esc(tt('ioc.colLastSeen', '最近出现')) + '</th>'
+                + '<th>' + esc(tt('ioc.colStatus', '状态')) + '</th>'
+                + '<th>' + esc(tt('ioc.actionUndo', '撤销命令')) + '</th>'
+                + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+                + (detail.ioc && detail.ioc.note ? '<p class="page-hint">' + esc(detail.ioc.note) + '</p>' : '')
+                : '')
+            + '</td></tr>';
+    }
+
     function renderList(items) {
         const tbody = el('ioc-body');
         if (!tbody) return;
@@ -109,9 +141,12 @@
             tbody.innerHTML = '<tr><td colspan="9">' + esc(tt('ioc.empty', '暂无情报')) + '</td></tr>';
             return;
         }
-        const rows = items.map(function (r) {
+        const rows = [];
+        items.forEach(function (r) {
             const canMarkFalsePositive = r.status === 'observed' || r.status === 'confirmed';
-            const actions = '<button class="btn-secondary btn-sm" data-require-permission="ioc:read" onclick="showIOCDetail(\'' + esc(r.id) + '\')">' + esc(tt('ioc.actionDetail', '详情')) + '</button> '
+            const expanded = expandedIocId === r.id;
+            const actions = '<button class="btn-secondary btn-sm" data-require-permission="ioc:read" onclick="showIOCDetail(\'' + esc(r.id) + '\')">'
+                + esc(expanded ? tt('ioc.actionCollapse', '收起') : tt('ioc.actionDetail', '详情')) + '</button> '
                 + (r.status === 'observed'
                     ? '<button class="btn-secondary btn-sm" data-require-permission="ioc:write" onclick="setIOCStatus(\'' + esc(r.id) + '\',\'confirmed\')">' + esc(tt('ioc.actionConfirm', '确认')) + '</button> '
                     : '')
@@ -119,7 +154,7 @@
                     ? '<button class="btn-secondary btn-sm" data-require-permission="ioc:write" onclick="setIOCStatus(\'' + esc(r.id) + '\',\'false_positive\')">' + esc(tt('ioc.actionFalsePositive', '误报')) + '</button> '
                     : '')
                 + '<button class="btn-danger btn-sm" data-require-permission="ioc:write" onclick="deleteIOC(\'' + esc(r.id) + '\')">' + esc(tt('ioc.actionDelete', '删除')) + '</button>';
-            return '<tr>'
+            rows.push('<tr>'
                 + '<td><code>' + esc(r.value) + '</code></td>'
                 + '<td>' + esc(r.type) + '</td>'
                 + '<td>' + statusBadge(r.status) + '</td>'
@@ -129,7 +164,8 @@
                 + '<td>' + esc(String(r.hit_count || 0)) + '</td>'
                 + '<td>' + esc(fmtTime(r.last_seen)) + '</td>'
                 + '<td>' + actions + '</td>'
-                + '</tr>';
+                + '</tr>');
+            if (expanded) rows.push(renderDetailRow(r.id));
         });
         tbody.innerHTML = rows.join('');
     }
@@ -156,40 +192,23 @@
     }
 
     async function showIOCDetail(id) {
-        const box = el('ioc-detail');
-        if (!box) return;
-        box.style.display = 'block';
-        box.innerHTML = esc(tt('ioc.loading', '加载中…'));
+        // 行内展开：再点一次收起；详情按 id 缓存，避免重复请求。
+        if (expandedIocId === id) {
+            expandedIocId = '';
+            renderList(iocCache);
+            return;
+        }
+        expandedIocId = id;
+        renderList(iocCache);
+        if (iocDetailCache[id]) return;
         try {
             const payload = await apiFetchJSON('/api/ioc/' + encodeURIComponent(id));
-            const rec = payload.ioc || {};
-            const hosts = payload.hosts || [];
-            const rows = hosts.length
-                ? hosts.map(function (h) {
-                    return '<tr><td>' + esc(h.host_id) + '</td>'
-                        + '<td>' + esc(h.source || '-') + '</td>'
-                        + '<td><code>' + esc(h.rule_id || '-') + '</code></td>'
-                        + '<td>' + esc(String(h.hit_count)) + '</td>'
-                        + '<td>' + esc(fmtTime(h.last_seen)) + '</td>'
-                        + '<td>' + (h.blocked_at ? esc(tt('ioc.statusBlocked', '已封禁')) + ' ' + esc(fmtTime(h.blocked_at)) : '-') + '</td>'
-                        + '<td><code>' + esc(h.unblock_command || '-') + '</code></td></tr>';
-                }).join('')
-                : '<tr><td colspan="7">' + esc(tt('ioc.detailNoHosts', '还没有命中记录')) + '</td></tr>';
-            box.innerHTML = '<h3 style="margin:0 0 8px;">' + esc(rec.value) + ' <small>(' + esc(rec.type) + ')</small></h3>'
-                + '<p style="margin:0 0 10px;">' + esc(tt('ioc.colStatus', '状态')) + ' ' + statusBadge(rec.status)
-                + '　' + esc(tt('ioc.colSeverity', '严重度')) + ' ' + severityBadge(rec.severity)
-                + '　' + esc(tt('ioc.colConfidence', '置信度')) + ' ' + esc(String(rec.confidence))
-                + '　' + esc(tt('ioc.colLastSeen', '最近出现')) + ' ' + esc(fmtTime(rec.last_seen)) + '</p>'
-                + (rec.note ? '<p style="margin:0 0 10px;">' + esc(rec.note) + '</p>' : '')
-                + '<div class="table-container"><table class="data-table"><thead><tr>'
-                + '<th>' + esc(tt('hosts.title', '主机')) + '</th>'
-                + '<th>' + esc(tt('ioc.colLastSeen', '最近出现')) + '</th>'
-                + '<th>' + esc(tt('ioc.colHits', '命中次数')) + '</th>'
-                + '<th>' + esc(tt('ioc.colStatus', '状态')) + '</th>'
-                + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+            iocDetailCache[id] = { ioc: payload.ioc || {}, hosts: payload.hosts || [] };
         } catch (err) {
-            box.innerHTML = esc(err.message);
+            delete iocDetailCache[id];
+            if (typeof showNotification === 'function') showNotification(err.message, 'error');
         }
+        renderList(iocCache);
     }
 
     async function saveIOC() {
@@ -223,6 +242,8 @@
 
     async function setIOCStatus(id, status) {
         try {
+            delete iocDetailCache[id];
+            if (expandedIocId === id) expandedIocId = '';
             await apiFetchJSON('/api/ioc/' + encodeURIComponent(id) + '/status', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -240,8 +261,8 @@
         }
         try {
             await apiFetchJSON('/api/ioc/' + encodeURIComponent(id), { method: 'DELETE' });
-            const box = el('ioc-detail');
-            if (box) box.style.display = 'none';
+            delete iocDetailCache[id];
+            if (expandedIocId === id) expandedIocId = '';
             await loadIOC();
         } catch (err) {
             if (typeof showNotification === 'function') showNotification(err.message, 'error');

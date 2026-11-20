@@ -36,6 +36,8 @@ var PermissionCatalog = map[string]string{
 	"host:exec":            "Execute commands on managed hosts",
 	"ioc:read":             "View IOC intelligence records and their host hits",
 	"ioc:write":            "Create, update, and block/unblock IOC intelligence records",
+	"memory:read":          "Read agent memories (critical / long-term / short-term)",
+	"memory:write":         "Create, update, and delete agent memories",
 	"mcp:read":             "View MCP status and external MCP configuration",
 	"mcp:execute":          "Invoke the authenticated MCP endpoint",
 	"mcp:external:execute": "Invoke tools exposed by configured external MCP servers",

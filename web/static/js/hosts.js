@@ -100,7 +100,17 @@
     }
 
     function syncHostAuthFields() {
-        const authType = el('host-auth-type')?.value || 'password';
+        const protocol = el('host-protocol')?.value || 'ssh';
+        const authSelect = el('host-auth-type');
+        // Telnet 只有明文口令这一种认证方式：禁用并清掉「私钥」选项。
+        if (authSelect) {
+            const keyOption = authSelect.querySelector('option[value="key"]');
+            if (keyOption) keyOption.disabled = protocol === 'telnet';
+            if (protocol === 'telnet' && authSelect.value === 'key') {
+                authSelect.value = 'password';
+            }
+        }
+        const authType = authSelect?.value || 'password';
         const passwordGroup = el('host-password-group');
         const keyGroup = el('host-key-group');
         const passphraseGroup = el('host-passphrase-group');

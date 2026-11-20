@@ -101,6 +101,12 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	if err != nil {
 		return nil, fmt.Errorf("初始化数据库失败: %w", err)
 	}
+	// 启动时清理一次过期短期记忆（critical / long_term 不参与）。
+	if pruned, pruneErr := db.PruneExpiredMemories(time.Now()); pruneErr != nil {
+		log.Logger.Warn("清理过期短期记忆失败", zap.Error(pruneErr))
+	} else if pruned > 0 {
+		log.Logger.Info("已清理过期短期记忆", zap.Int("count", pruned))
+	}
 
 	// 主机凭据加密：密钥优先取 CYBERSTRIKE_HOST_KEY，否则与数据库同目录的密钥文件
 	hostSecretBox, secretErr := security.LoadSecretBox(filepath.Join(filepath.Dir(dbPath), "host_secret.key"))
@@ -175,6 +181,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	registerHostTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
+	registerMemoryTools(mcpServer, db, log.Logger)
 
 	// 创建外部MCP管理器（使用与内部MCP服务器相同的存储）
 	externalMCPMgr := mcp.NewExternalMCPManagerWithStorage(log.Logger, db)
@@ -523,6 +530,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		registerHostTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
+	registerMemoryTools(mcpServer, db, log.Logger)
 		return nil
 	}
 	configHandler.SetVulnerabilityToolRegistrar(vulnerabilityRegistrar)
@@ -1060,6 +1068,9 @@ func setupRoutes(
 		protected.GET("/ioc/:id", hostHandler.GetIOC)
 		protected.PATCH("/ioc/:id/status", hostHandler.UpdateIOCStatus)
 		protected.DELETE("/ioc/:id", hostHandler.DeleteIOC)
+		protected.GET("/memory", hostHandler.ListMemories)
+		protected.POST("/memory", hostHandler.UpsertMemory)
+		protected.DELETE("/memory/:id", hostHandler.DeleteMemory)
 
 		// 批量任务管理
 		protected.POST("/batch-tasks", agentHandler.CreateBatchQueue)

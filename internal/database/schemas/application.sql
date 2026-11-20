@@ -688,3 +688,30 @@ CREATE UNIQUE INDEX idx_findings_uniq ON detect_findings(host_id, source, rule_i
 CREATE INDEX idx_findings_host ON detect_findings(host_id);
 CREATE INDEX idx_findings_severity ON detect_findings(severity);
 CREATE INDEX idx_findings_last_seen ON detect_findings(last_seen);
+
+-- Agent 记忆：关键 / 长期 / 短期三级。
+--   critical   关键记忆：永不自动过期，只能显式删除（例如"生产库禁止重启"）
+--   long_term  长期记忆：永久保存，但 Agent 判定过时后可改可删（例如网络分段、命名习惯）
+--   short_term 短期记忆：默认 30 天过期，Agent 可续期（例如"本周在排查某告警"）
+-- 作用域：global（跨主机通用）/ host（绑定某台主机）/ user（绑定某个平台用户）。
+CREATE TABLE agent_memory (
+    id TEXT PRIMARY KEY,
+    tier TEXT NOT NULL DEFAULT 'long_term',
+    scope TEXT NOT NULL DEFAULT 'global',
+    host_id TEXT,
+    owner_user_id TEXT,
+    mem_key TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tags TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    hit_count INTEGER NOT NULL DEFAULT 0,
+    last_used_at DATETIME,
+    expires_at DATETIME,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE UNIQUE INDEX idx_agent_memory_uniq ON agent_memory(tier, scope, mem_key, IFNULL(host_id, ''), IFNULL(owner_user_id, ''));
+CREATE INDEX idx_agent_memory_tier ON agent_memory(tier);
+CREATE INDEX idx_agent_memory_host ON agent_memory(host_id);
+CREATE INDEX idx_agent_memory_updated ON agent_memory(updated_at);

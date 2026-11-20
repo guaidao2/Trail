@@ -410,6 +410,16 @@
                             </div>
                         </div>
                     </div>
+                    <div class="nav-item" data-page="memory">
+                        <div class="nav-item-content" data-title="记忆" onclick="switchPage('memory')" data-i18n="nav.memory" data-i18n-attr="data-title" data-i18n-skip-text="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3a9 9 0 1 0 9 9"></path>
+                                <path d="M12 7v5l3 3"></path>
+                                <path d="M21 3v6h-6"></path>
+                            </svg>
+                            <span data-i18n="nav.memory">记忆</span>
+                        </div>
+                    </div>
                     <div class="nav-section-label" role="presentation">
                         <span data-i18n="navGroups.administration">平台管理</span>
                     </div>
@@ -2608,6 +2618,60 @@
                 </div>
 
                 <!-- 角色管理页面 -->
+                <div id="page-memory" class="page">
+                    <div class="page-header">
+                        <h2 data-i18n="memory.title">记忆</h2>
+                        <div class="page-header-actions">
+                            <button class="btn-primary" data-require-permission="memory:write" onclick="openMemoryEditor()" data-i18n="memory.add">新增记忆</button>
+                            <button class="btn-secondary" onclick="loadMemories()" data-i18n="common.refresh">刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-content">
+                        <div id="memory-summary" class="ioc-status-summary" style="margin-bottom:12px;"></div>
+                        <div class="batch-queues-filters tasks-filters batch-queues-filters--compact">
+                            <label>
+                                <span data-i18n="memory.searchLabel">搜索</span>
+                                <input type="text" id="memory-search" data-i18n="memory.searchPlaceholder" data-i18n-attr="placeholder" placeholder="键 / 内容 / 标签" oninput="loadMemories()" />
+                            </label>
+                            <label>
+                                <span data-i18n="memory.tierLabel">等级</span>
+                                <select id="memory-tier-filter" onchange="loadMemories()">
+                                    <option value="" data-i18n="memory.all">全部</option>
+                                    <option value="critical" data-i18n="memory.tierCritical">关键记忆</option>
+                                    <option value="long_term" data-i18n="memory.tierLongTerm">长期记忆</option>
+                                    <option value="short_term" data-i18n="memory.tierShortTerm">短期记忆</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span data-i18n="memory.scopeLabel">作用域</span>
+                                <select id="memory-scope-filter" onchange="loadMemories()">
+                                    <option value="" data-i18n="memory.all">全部</option>
+                                    <option value="global" data-i18n="memory.scopeGlobal">全局</option>
+                                    <option value="host" data-i18n="memory.scopeHost">主机</option>
+                                    <option value="user" data-i18n="memory.scopeUser">用户</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div class="table-container ioc-table-card">
+                            <table class="data-table ioc-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="memory.tierLabel">等级</th>
+                                        <th data-i18n="memory.colKey">键</th>
+                                        <th data-i18n="memory.colContent">内容</th>
+                                        <th data-i18n="memory.scopeLabel">作用域</th>
+                                        <th data-i18n="memory.colHits">命中</th>
+                                        <th data-i18n="memory.colUpdated">更新时间</th>
+                                        <th data-i18n="memory.colActions">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="memory-body">
+                                    <tr><td colspan="7" data-i18n="common.loading">加载中…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
                 <div id="page-roles-management" class="page">
                     <div class="page-header">
                         <h2 data-i18n="roles.title">角色管理</h2>
@@ -5790,6 +5854,61 @@
 </html>
 
     <!-- 主机检测发现弹窗（日志命中 + 基线不符合项） -->
+    <!-- 记忆新增 / 编辑弹窗 -->
+    <div id="memory-edit-modal" class="modal">
+        <div class="modal-content" style="max-width: 720px;">
+            <div class="modal-header">
+                <h2 id="memory-edit-title" data-i18n="memory.add">新增记忆</h2>
+                <span class="modal-close" onclick="closeMemoryEditor()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="ioc-form ioc-editor-form">
+                    <label class="ioc-form-field ioc-form-field--value">
+                        <span class="ioc-form-label" data-i18n="memory.colKey">键</span>
+                        <input type="text" id="memory-form-key" placeholder="prod-db-no-restart" />
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--type">
+                        <span class="ioc-form-label" data-i18n="memory.tierLabel">等级</span>
+                        <select id="memory-form-tier">
+                            <option value="critical" data-i18n="memory.tierCritical">关键记忆</option>
+                            <option value="long_term" selected data-i18n="memory.tierLongTerm">长期记忆</option>
+                            <option value="short_term" data-i18n="memory.tierShortTerm">短期记忆</option>
+                        </select>
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--status">
+                        <span class="ioc-form-label" data-i18n="memory.scopeLabel">作用域</span>
+                        <select id="memory-form-scope">
+                            <option value="global" selected data-i18n="memory.scopeGlobal">全局</option>
+                            <option value="host" data-i18n="memory.scopeHost">主机</option>
+                            <option value="user" data-i18n="memory.scopeUser">用户</option>
+                        </select>
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--severity">
+                        <span class="ioc-form-label" data-i18n="memory.colHost">主机 ID</span>
+                        <input type="text" id="memory-form-host" placeholder="scope=host 时必填" />
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--confidence">
+                        <span class="ioc-form-label" data-i18n="memory.colTTL">短期天数</span>
+                        <input type="number" id="memory-form-ttl" value="30" min="1" max="3650" />
+                    </label>
+                    <label class="ioc-form-field ioc-form-field--note">
+                        <span class="ioc-form-label" data-i18n="memory.colTags">标签</span>
+                        <input type="text" id="memory-form-tags" placeholder="数据库,变更禁忌" />
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="memory-form-content" data-i18n="memory.colContent">内容</label>
+                    <textarea id="memory-form-content" rows="5" placeholder="结论与适用范围"></textarea>
+                </div>
+                <p class="page-hint" data-i18n="memory.hint">关键记忆与长期记忆永久保存；短期记忆到期自动清理。</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeMemoryEditor()" data-i18n="common.cancel">取消</button>
+                <button class="btn-primary" data-require-permission="memory:write" onclick="saveMemory()" data-i18n="ioc.save">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- IOC 新增 / 更新情报弹窗 -->
     <div id="ioc-edit-modal" class="modal">
         <div class="modal-content" style="max-width: 760px;">
@@ -5933,7 +6052,7 @@
                 <div class="form-group inline-group">
                     <label>
                         <span data-i18n="hosts.fieldProtocol">协议</span>
-                        <select id="host-protocol" onchange="syncHostPortDefault()">
+                        <select id="host-protocol" onchange="syncHostPortDefault(); syncHostAuthFields();">
                             <option value="ssh">SSH</option>
                             <option value="telnet">Telnet</option>
                         </select>
@@ -6046,6 +6165,7 @@
 
     <script src="/static/js/hosts.js?v=20261110-hosts"></script>
     <script src="/static/js/ioc.js?v=20261116-ioc"></script>
+    <script src="/static/js/memory.js?v=20261120-memory"></script>
     <!-- 移动端交互层：必须最后加载，它包装 window.switchPage 并注入移动端 DOM -->
 </body>
 </html>
