@@ -1,3 +1,8 @@
+//go:build cgo
+
+// 这两个用例需要真实 sqlite（go-sqlite3 依赖 cgo）。
+// 无 cgo 的环境（如 Windows 默认构建）下跳过，避免报 sqlite 桩错误掩盖真正的失败。
+
 package vulnintel
 
 import (
