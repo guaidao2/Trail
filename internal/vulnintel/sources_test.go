@@ -2,6 +2,7 @@ package vulnintel
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -147,5 +148,84 @@ func TestPageDelayFor(t *testing.T) {
 	}
 	if got := PageDelayFor("key-123"); got != 700*time.Millisecond {
 		t.Fatalf("带 key 间隔应为 0.7s，实际 %v", got)
+	}
+}
+
+// TestGHSAParsesBothReferenceFormats 覆盖 GitHub 的三种情况：
+// 早期 references 是 [{"url":...}]，现在是 ["..."]；两种都要吃。
+// 第三种是形状完全变了（数字/混合类型）：不报错、也不写 refs，
+// 避免用不完整数据覆盖库里已有的引用。
+func TestGHSAParsesBothReferenceFormats(t *testing.T) {
+	const advisoryTail = `"summary":"s","severity":"high",
+		"vulnerabilities":[{"package":{"ecosystem":"pip","name":"requests"},
+		"vulnerable_version_range":">= 2.0, < 2.31.0",
+		"first_patched_version":{"identifier":"2.31.0"}}]}`
+
+	cases := []struct {
+		name      string
+		raw       string
+		wantRefs  bool
+		wantCWE   bool
+	}{
+		{
+			name: "references-as-strings",
+			raw: `{"ghsa_id":"GHSA-1111-2222-3333","cve_id":"CVE-2023-32681",
+				"references":["https://a.example","https://b.example"],"cwes":["CWE-79"],` + advisoryTail,
+			wantRefs: true, wantCWE: true,
+		},
+		{
+			name: "references-as-objects",
+			raw: `{"ghsa_id":"GHSA-1111-2222-3333","cve_id":"CVE-2023-32681",
+				"references":[{"url":"https://a.example"},{"url":"https://b.example"}],
+				"cwes":[{"cwe_id":"CWE-79"}],` + advisoryTail,
+			wantRefs: true, wantCWE: true,
+		},
+		{
+			// 形状完全变了：不报错，但也不拿半截数据去覆盖
+			name: "unexpected-shape",
+			raw: `{"ghsa_id":"GHSA-1111-2222-3333","cve_id":"CVE-2023-32681",
+				"references":123,"cwes":[1,2],` + advisoryTail,
+			wantRefs: false, wantCWE: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var a ghsaAdvisory
+			if err := json.Unmarshal([]byte(tc.raw), &a); err != nil {
+				t.Fatalf("解析公告失败: %v", err)
+			}
+			intel, ranges, ok := ghsaToIntel(a)
+			if !ok {
+				t.Fatal("应产出情报记录")
+			}
+			if intel.CVEID != "CVE-2023-32681" {
+				t.Fatalf("CVE 编号错误: %s", intel.CVEID)
+			}
+			if len(ranges) != 1 || ranges[0].Product != "requests" {
+				t.Fatalf("版本区间解析错误: %+v", ranges)
+			}
+			if !tc.wantRefs {
+				if len(intel.Refs) != 0 {
+					t.Fatalf("形状异常时不应写 refs（否则会覆盖已有引用），实际: %v", intel.Refs)
+				}
+				if len(intel.CWEs) != 0 {
+					t.Fatalf("形状异常时不应写 cwes，实际: %v", intel.CWEs)
+				}
+				return
+			}
+			joined := strings.Join(intel.Refs, " ")
+			for _, want := range []string{"https://a.example", "https://b.example"} {
+				if !strings.Contains(joined, want) {
+					t.Fatalf("缺少引用 %s，实际: %v", want, intel.Refs)
+				}
+			}
+			if !tc.wantCWE {
+				return
+			}
+			if len(intel.CWEs) == 0 || intel.CWEs[0] != "CWE-79" {
+				t.Fatalf("CWE 解析错误: %v", intel.CWEs)
+			}
+		})
 	}
 }

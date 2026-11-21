@@ -2,6 +2,7 @@ package vulnintel
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"sort"
@@ -23,24 +24,24 @@ const (
 // ---------- CISA KEV ----------
 
 type kevCatalog struct {
-	CatalogVersion string `json:"catalogVersion"`
-	DateReleased   string `json:"dateReleased"`
-	Count          int    `json:"count"`
+	CatalogVersion  string     `json:"catalogVersion"`
+	DateReleased    string     `json:"dateReleased"`
+	Count           int        `json:"count"`
 	Vulnerabilities []kevEntry `json:"vulnerabilities"`
 }
 
 // kevEntry 是 KEV 目录里的一条记录。目录本身带齐了厂商、产品、名称、
 // 简述、修复动作与截止日期，这些信息不依赖 NVD 就能展示。
 type kevEntry struct {
-	CVEID                       string `json:"cveID"`
-	DateAdded                   string `json:"dateAdded"`
-	VendorProject               string `json:"vendorProject"`
-	Product                     string `json:"product"`
-	VulnerabilityName           string `json:"vulnerabilityName"`
-	ShortDescription            string `json:"shortDescription"`
-	RequiredAction              string `json:"requiredAction"`
-	DueDate                     string `json:"dueDate"`
-	KnownRansomwareCampaignUse  string `json:"knownRansomwareCampaignUse"`
+	CVEID                      string `json:"cveID"`
+	DateAdded                  string `json:"dateAdded"`
+	VendorProject              string `json:"vendorProject"`
+	Product                    string `json:"product"`
+	VulnerabilityName          string `json:"vulnerabilityName"`
+	ShortDescription           string `json:"shortDescription"`
+	RequiredAction             string `json:"requiredAction"`
+	DueDate                    string `json:"dueDate"`
+	KnownRansomwareCampaignUse string `json:"knownRansomwareCampaignUse"`
 }
 
 // fetchKEV 拉取完整 KEV 目录（量小、信号最强，每次全量覆盖）。
@@ -296,15 +297,13 @@ func fetchEPSSPage(ctx context.Context, c *client, base string, offset, limit in
 // ---------- GHSA ----------
 
 type ghsaAdvisory struct {
-	GHSAID    string `json:"ghsa_id"`
-	CVEID     string `json:"cve_id"`
-	Summary   string `json:"summary"`
-	Severity  string `json:"severity"`
-	Published string `json:"published_at"`
-	Updated   string `json:"updated_at"`
-	References []struct {
-		URL string `json:"url"`
-	} `json:"references"`
+	GHSAID          string            `json:"ghsa_id"`
+	CVEID           string            `json:"cve_id"`
+	Summary         string            `json:"summary"`
+	Severity        string            `json:"severity"`
+	Published       string            `json:"published_at"`
+	Updated         string            `json:"updated_at"`
+	References      ghsaReferenceList `json:"references"`
 	Vulnerabilities []struct {
 		Package struct {
 			Ecosystem string `json:"ecosystem"`
@@ -315,9 +314,69 @@ type ghsaAdvisory struct {
 			Identifier string `json:"identifier"`
 		} `json:"first_patched_version"`
 	} `json:"vulnerabilities"`
-	CWEs []struct {
+	CWEs ghsaCWEList `json:"cwes"`
+}
+
+// ghsaReferenceList 兼容 GitHub 的两种返回：
+// 早期是 [{"url":"https://..."}]，现在是 ["https://..."]。
+//
+// 解析失败时置 Failed 而不是报错（GHSA 是补充源，不该拖垮整轮同步）；
+// 调用方据此跳过写 refs，避免用不完整的数据覆盖库里已有的引用。
+type ghsaReferenceList struct {
+	URLs   []string
+	Failed bool
+}
+
+func (l *ghsaReferenceList) UnmarshalJSON(b []byte) error {
+	var strs []string
+	if err := json.Unmarshal(b, &strs); err == nil {
+		l.URLs, l.Failed = strs, false
+		return nil
+	}
+	var objs []struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(b, &objs); err == nil {
+		out := make([]string, 0, len(objs))
+		for _, o := range objs {
+			if o.URL != "" {
+				out = append(out, o.URL)
+			}
+		}
+		l.URLs, l.Failed = out, false
+		return nil
+	}
+	l.URLs, l.Failed = nil, true
+	return nil
+}
+
+// ghsaCWEList 同样兼容 ["CWE-79"] 与 [{"cwe_id":"CWE-79"}]。
+type ghsaCWEList struct {
+	IDs    []string
+	Failed bool
+}
+
+func (l *ghsaCWEList) UnmarshalJSON(b []byte) error {
+	var strs []string
+	if err := json.Unmarshal(b, &strs); err == nil {
+		l.IDs, l.Failed = strs, false
+		return nil
+	}
+	var objs []struct {
 		CWEID string `json:"cwe_id"`
-	} `json:"cwes"`
+	}
+	if err := json.Unmarshal(b, &objs); err == nil {
+		out := make([]string, 0, len(objs))
+		for _, o := range objs {
+			if o.CWEID != "" {
+				out = append(out, o.CWEID)
+			}
+		}
+		l.IDs, l.Failed = out, false
+		return nil
+	}
+	l.IDs, l.Failed = nil, true
+	return nil
 }
 
 // fetchGHSA 拉一页 GHSA 公告（since 之后，按发布顺序）。
@@ -371,21 +430,27 @@ func ghsaToIntel(a ghsaAdvisory) (database.VulnIntel, []database.VulnIntelRange,
 	if len(ranges) == 0 {
 		return database.VulnIntel{}, nil, false
 	}
-	refs := []string{"https://github.com/advisories/" + strings.TrimSpace(a.GHSAID)}
-	for _, r := range a.References {
-		if r.URL != "" && len(refs) < 20 {
-			refs = append(refs, r.URL)
+	// 解析失败时整段跳过：refs 若只写 advisory URL 会把库里已有的完整引用覆盖掉。
+	refs := []string{}
+	if !a.References.Failed {
+		refs = append(refs, "https://github.com/advisories/"+strings.TrimSpace(a.GHSAID))
+		for _, u := range a.References.URLs {
+			if u != "" && len(refs) < 20 {
+				refs = append(refs, u)
+			}
 		}
 	}
 	cwes := []string{}
-	for _, c := range a.CWEs {
-		if c.CWEID != "" {
-			cwes = append(cwes, c.CWEID)
+	if !a.CWEs.Failed {
+		for _, c := range a.CWEs.IDs {
+			if c != "" {
+				cwes = append(cwes, c)
+			}
 		}
 	}
 	return database.VulnIntel{
 		CVEID: cve, Title: truncate(a.Summary, 200), Description: a.Summary,
-		Severity: strings.ToUpper(strings.TrimSpace(a.Severity)),
+		Severity:    strings.ToUpper(strings.TrimSpace(a.Severity)),
 		PublishedAt: a.Published, ModifiedAt: a.Updated,
 		Source: "ghsa", Refs: refs, CWEs: cwes,
 	}, ranges, true
