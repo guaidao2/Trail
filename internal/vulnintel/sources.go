@@ -309,12 +309,48 @@ type ghsaAdvisory struct {
 			Ecosystem string `json:"ecosystem"`
 			Name      string `json:"name"`
 		} `json:"package"`
-		VulnerableVersionRange string `json:"vulnerable_version_range"`
-		FirstPatchedVersion    struct {
-			Identifier string `json:"identifier"`
-		} `json:"first_patched_version"`
+		VulnerableVersionRange string         `json:"vulnerable_version_range"`
+		FirstPatchedVersion    ghsaFlexString `json:"first_patched_version"`
 	} `json:"vulnerabilities"`
 	CWEs ghsaCWEList `json:"cwes"`
+}
+
+// ghsaFlexString 接受三种形态：字符串 "1.3.2"、null、以及 {"identifier":"1.3.2"}。
+// 真实接口实测：first_patched_version 是 str 162 / null 9，没有对象形态。
+type ghsaFlexString struct {
+	Value string
+}
+
+func (f *ghsaFlexString) UnmarshalJSON(b []byte) error {
+	f.Value = ""
+	t := strings.TrimSpace(string(b))
+	if t == "" || t == "null" {
+		return nil
+	}
+	if t[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		f.Value = strings.TrimSpace(s)
+		return nil
+	}
+	var obj struct {
+		Identifier string `json:"identifier"`
+		Version    string `json:"version"`
+		Name       string `json:"name"`
+	}
+	if err := json.Unmarshal(b, &obj); err == nil {
+		switch {
+		case obj.Identifier != "":
+			f.Value = strings.TrimSpace(obj.Identifier)
+		case obj.Version != "":
+			f.Value = strings.TrimSpace(obj.Version)
+		case obj.Name != "":
+			f.Value = strings.TrimSpace(obj.Name)
+		}
+	}
+	return nil
 }
 
 // ghsaReferenceList 兼容 GitHub 的两种返回：
@@ -380,7 +416,11 @@ func (l *ghsaCWEList) UnmarshalJSON(b []byte) error {
 }
 
 // fetchGHSA 拉一页 GHSA 公告（since 之后，按发布顺序）。
-func fetchGHSA(ctx context.Context, c *client, base, token string, since time.Time, page, perPage int) ([]ghsaAdvisory, error) {
+//
+// 逐条解码：某条公告字段形状对不上时只跳过这一条并返回跳过数。
+// 整页解码一旦失败，sync.go 会在保存游标之前 return，游标卡在原位、
+// 这一页永远重试——GHSA 归零两次都是这么来的。
+func fetchGHSA(ctx context.Context, c *client, base, token string, since time.Time, page, perPage int) ([]ghsaAdvisory, int, error) {
 	if perPage <= 0 || perPage > 100 {
 		perPage = 100
 	}
@@ -395,11 +435,25 @@ func fetchGHSA(ctx context.Context, c *client, base, token string, since time.Ti
 	if t := strings.TrimSpace(token); t != "" {
 		headers["Authorization"] = "Bearer " + t
 	}
-	var out []ghsaAdvisory
-	if err := c.getJSON(ctx, strings.TrimRight(base, "/")+"/advisories?"+q.Encode(), headers, &out); err != nil {
-		return nil, err
+	var raw []json.RawMessage
+	if err := c.getJSON(ctx, strings.TrimRight(base, "/")+"/advisories?"+q.Encode(), headers, &raw); err != nil {
+		return nil, 0, err
 	}
-	return out, nil
+	out := make([]ghsaAdvisory, 0, len(raw))
+	skipped := 0
+	for _, item := range raw {
+		var a ghsaAdvisory
+		if err := json.Unmarshal(item, &a); err != nil {
+			skipped++
+			continue
+		}
+		if strings.TrimSpace(a.GHSAID) == "" {
+			skipped++
+			continue
+		}
+		out = append(out, a)
+	}
+	return out, skipped, nil
 }
 
 // ghsaToIntel 把 GHSA 公告映射成存储层结构（没有 CVE 编号的公告跳过）。
@@ -417,6 +471,9 @@ func ghsaToIntel(a ghsaAdvisory) (database.VulnIntel, []database.VulnIntelRange,
 		}
 		startIncl, startExcl, endIncl, endExcl := parseGHSAVulnerableRange(v.VulnerableVersionRange)
 		ranges = append(ranges, database.VulnIntelRange{
+			// vendor 存归一化后的生态名（pypi/npm/rubygems/...）：GitHub 写 pip，
+			// OSV 写 PyPI，主机清单写 pip，必须收敛成同一个键才能精确匹配。
+			Vendor:         database.NormalizeEcosystem(v.Package.Ecosystem),
 			Product:        name,
 			Criteria:       a.GHSAID + " " + v.VulnerableVersionRange,
 			StartIncl:      startIncl,
@@ -424,7 +481,7 @@ func ghsaToIntel(a ghsaAdvisory) (database.VulnIntel, []database.VulnIntelRange,
 			EndIncl:        endIncl,
 			EndExcl:        endExcl,
 			Source:         "ghsa",
-			PatchedVersion: strings.TrimSpace(v.FirstPatchedVersion.Identifier),
+			PatchedVersion: v.FirstPatchedVersion.Value,
 		})
 	}
 	if len(ranges) == 0 {

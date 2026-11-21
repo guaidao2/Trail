@@ -430,3 +430,121 @@ func TestMatchPackagesOldEraNeedsManual(t *testing.T) {
 		t.Fatalf("2001 年的 CVE 应降级为 needs_manual，实际 %s: %+v", matches[0].Status, matches[0])
 	}
 }
+
+// 语言生态包只认 (生态, 精确包名)：
+//   - pip 的 jinja2 命中 vendor=pypi / product=jinja2 的区间
+//   - jinja2-sandbox（前缀相似）不命中
+//   - dpkg 的 jinja2 不命中生态区间（同名不同物）
+//   - docker 的 tag 不是版本，整体跳过
+func TestMatchPackagesEcosystemExact(t *testing.T) {
+	db := newVulnIntelTestDB(t)
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2024-22195", Severity: "HIGH", Source: "ghsa", PublishedAt: "2024-01-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "pypi", Product: "jinja2", StartIncl: "0", EndExcl: "3.1.3", Source: "ghsa"},
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	matches, err := db.MatchPackages([]Package{
+		{Name: "jinja2", Version: "3.0.0", Source: "pip"},
+		{Name: "jinja2-sandbox", Version: "3.0.0", Source: "pip"},
+		{Name: "jinja2", Version: "3.0.0", Source: "dpkg"},
+		{Name: "php", Version: "8.2-apache", Source: "docker"},
+	})
+	if err != nil {
+		t.Fatalf("MatchPackages: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("应只有 pip 的 jinja2 命中，实际 %d: %+v", len(matches), matches)
+	}
+	if m := matches[0]; m.Package.Source != "pip" || m.Status != "affected" {
+		t.Fatalf("命中项不对: %+v", m)
+	}
+}
+
+// gem 包不能被当成 ruby 解释器；Debian 的 rubygems 过渡包同理。
+func TestMatchPackagesGemNotInterpreter(t *testing.T) {
+	db := newVulnIntelTestDB(t)
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2021-28966", Severity: "HIGH", Source: "nvd", PublishedAt: "2021-05-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "ruby-lang", Product: "ruby", StartIncl: "0", EndExcl: "2.7.3", Source: "nvd"},
+	}); err != nil {
+		t.Fatalf("Upsert ruby: %v", err)
+	}
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2017-0901", Severity: "HIGH", Source: "nvd", PublishedAt: "2017-08-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "rubygems", Product: "rubygems", StartIncl: "0", EndIncl: "2.6.12", Source: "nvd"},
+	}); err != nil {
+		t.Fatalf("Upsert rubygems: %v", err)
+	}
+	matches, err := db.MatchPackages([]Package{
+		{Name: "ruby-sdbm", Version: "1.0.0-5+b8", Source: "dpkg"},
+		{Name: "rubygems-integration", Version: "1.20.1", Source: "dpkg"},
+	})
+	if err != nil {
+		t.Fatalf("MatchPackages: %v", err)
+	}
+	for _, m := range matches {
+		if m.Status == "affected" {
+			t.Fatalf("不应判 affected（包名不是解释器/rubygems 本体）: %+v", m)
+		}
+	}
+}
+
+// 各来源的生态写法必须收敛成同一组键，否则 GHSA 的 pip 永远匹配不到 pip 包。
+func TestNormalizeEcosystem(t *testing.T) {
+	cases := map[string]string{
+		"pip": "pypi", "PyPI": "pypi", "python": "pypi",
+		"npm": "npm", "node": "npm",
+		"gem": "rubygems", "RubyGems": "rubygems",
+		"go": "go", "gomod": "go",
+		"rust": "crates.io", "crates.io": "crates.io", "cargo": "crates.io",
+		"composer": "packagist", "Packagist": "packagist",
+		"nuget": "nuget", "dotnet": "nuget",
+		"Maven": "maven",
+	}
+	for in, want := range cases {
+		if got := NormalizeEcosystem(in); got != want {
+			t.Fatalf("NormalizeEcosystem(%q) = %q, 期望 %q", in, got, want)
+		}
+	}
+}
+
+// 区间删除要按来源分口径：OSV 按 (vendor, product) 收窄，避免同生态内
+// 共享 CVE 别名的两条 advisory 互相删除；NVD/GHSA 按来源全删，才能清掉旧区间。
+func TestReplaceRangesScopedDelete(t *testing.T) {
+	db := newVulnIntelTestDB(t)
+	// 同一 CVE 两个生态（pypi / npm），应互不影响
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2024-9999", Source: "osv", PublishedAt: "2024-01-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "pypi", Product: "foo", StartIncl: "0", EndExcl: "1.0", Source: "osv"},
+	}); err != nil {
+		t.Fatalf("Upsert pypi: %v", err)
+	}
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2024-9999", Source: "osv", PublishedAt: "2024-01-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "npm", Product: "bar", StartIncl: "0", EndExcl: "2.0", Source: "osv"},
+	}); err != nil {
+		t.Fatalf("Upsert npm: %v", err)
+	}
+	_, ranges, _, err := db.GetVulnIntel("CVE-2024-9999")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(ranges) != 2 {
+		t.Fatalf("两个生态的区间都应保留，实际 %d: %+v", len(ranges), ranges)
+	}
+
+	// 同生态同产品重写：旧区间要被替换掉
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2024-9999", Source: "osv", PublishedAt: "2024-01-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "pypi", Product: "foo", StartIncl: "0", EndExcl: "1.5", Source: "osv"},
+	}); err != nil {
+		t.Fatalf("Upsert pypi again: %v", err)
+	}
+	_, ranges, _, err = db.GetVulnIntel("CVE-2024-9999")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(ranges) != 2 {
+		t.Fatalf("重写后仍应是 2 条（pypi 被替换 + npm 保留），实际 %d: %+v", len(ranges), ranges)
+	}
+	for _, r := range ranges {
+		if r.Vendor == "pypi" && r.EndExcl != "1.5" {
+			t.Fatalf("pypi 区间应被替换为 1.5，实际 %+v", r)
+		}
+	}
+}

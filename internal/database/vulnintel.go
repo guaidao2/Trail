@@ -174,13 +174,32 @@ func (db *DB) UpsertVulnIntel(v VulnIntel, ranges []VulnIntelRange) error {
 }
 
 func (db *DB) replaceVulnIntelRanges(cveID string, ranges []VulnIntelRange) error {
-	// 只清理同一来源的区间：NVD 与 GHSA 对同一条 CVE 各有一套区间，互相不能覆盖。
-	sources := map[string]bool{}
+	// 删除范围按来源区分：
+	//   - osv：一个生态里可能有多条 advisory 共享同一 CVE 别名（GHSA-* 与 PYSEC-*），
+	//     必须再按 (vendor, product) 收窄，否则后写的一条会把别的包的区间删掉；
+	//   - nvd / ghsa：一条 CVE 的 CPE 可能有多个 vendor/product，按 source 全删，
+	//     这样源里删掉的旧区间才会被清掉（否则会留下长期假 affected）。
+	type scope struct{ src, vendor, product string }
+	scopes := map[scope]bool{}
 	for _, r := range ranges {
-		sources[normalizeRangeSource(r.Source)] = true
+		src := normalizeRangeSource(r.Source)
+		sc := scope{src: src}
+		if src == "osv" {
+			sc.vendor = strings.ToLower(strings.TrimSpace(r.Vendor))
+			sc.product = strings.ToLower(strings.TrimSpace(r.Product))
+		}
+		scopes[sc] = true
 	}
-	for src := range sources {
-		if _, err := db.Exec(`DELETE FROM vuln_intel_range WHERE cve_id = ? AND source = ?`, cveID, src); err != nil {
+	for sc := range scopes {
+		var err error
+		switch {
+		case sc.src == "osv" && sc.product != "":
+			_, err = db.Exec(`DELETE FROM vuln_intel_range WHERE cve_id = ? AND source = ? AND LOWER(vendor) = ? AND LOWER(product) = ?`,
+				cveID, sc.src, sc.vendor, sc.product)
+		default:
+			_, err = db.Exec(`DELETE FROM vuln_intel_range WHERE cve_id = ? AND source = ?`, cveID, sc.src)
+		}
+		if err != nil {
 			return fmt.Errorf("清理旧版本区间失败: %w", err)
 		}
 	}
@@ -773,6 +792,32 @@ func (db *DB) CountVulnIntelRanges() (int, error) {
 	return n, nil
 }
 
+// ecosystemBySource 把清单来源映射成 OSV/GHSA 的生态名（小写）。
+// 非空表示这是语言生态包：只允许按 (生态, 精确包名) 匹配，不做 CPE 产品名推导——
+// 否则 ruby-sdbm 会命中 ruby 解释器、@scope/pkg 会命中 pkg 之类的同名包。
+func ecosystemBySource(source string) string {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case "pip", "pypi", "python",
+		"npm", "node", "yarn", "pnpm",
+		"gem", "rubygems", "ruby",
+		"go", "gomod", "golang",
+		"cargo", "crates", "crates.io",
+		"composer", "packagist",
+		"maven", "nuget":
+		return NormalizeEcosystem(source)
+	}
+	return ""
+}
+
+// isEcosystemVendor 判断区间里的 vendor 是不是语言生态名（而不是 CPE 厂商）。
+func isEcosystemVendor(vendor string) bool {
+	switch strings.ToLower(strings.TrimSpace(vendor)) {
+	case "pypi", "npm", "rubygems", "go", "crates.io", "packagist", "maven", "nuget", "hex", "pub", "composer":
+		return true
+	}
+	return false
+}
+
 // MatchPackages 把主机软件清单与情报库做保守匹配。
 //
 // 规则（刻意保守）：
@@ -786,6 +831,7 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 	type candidate struct {
 		pkg   Package
 		names []string
+		eco   string // 非空表示语言生态包，只认 vendor == eco 的精确匹配
 	}
 	candidates := make([]candidate, 0, len(pkgs))
 	productToCands := map[string][]int{}
@@ -796,12 +842,23 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 			// docker 的 latest / <none>、非版本号标签无法比较，直接跳过
 			continue
 		}
-		names := productCandidates(name)
+		if strings.EqualFold(strings.TrimSpace(pkg.Source), "docker") {
+			// 镜像 tag 不是包版本（8.2-apache、latest、alpine），拿它比区间必然误判；
+			// 容器里的真实包要看镜像内的包管理器，那是另一条采集路径。
+			continue
+		}
+		eco := ecosystemBySource(pkg.Source)
+		var names []string
+		if eco != "" {
+			names = []string{name}
+		} else {
+			names = productCandidates(name)
+		}
 		if len(names) == 0 {
 			continue
 		}
 		idx := len(candidates)
-		candidates = append(candidates, candidate{pkg: pkg, names: names})
+		candidates = append(candidates, candidate{pkg: pkg, names: names, eco: eco})
 		for _, n := range names {
 			productToCands[n] = append(productToCands[n], idx)
 		}
@@ -831,7 +888,7 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 		for _, n := range batch {
 			args = append(args, n)
 		}
-		rows, err := db.Query(`SELECT r.cve_id, v.severity, v.kev, v.epss, COALESCE(v.published_at,''), r.product,
+		rows, err := db.Query(`SELECT r.cve_id, v.severity, v.kev, v.epss, COALESCE(v.published_at,''), r.vendor, r.product,
 			r.start_incl, r.start_excl, r.end_incl, r.end_excl, r.patched_version
 			FROM vuln_intel_range r JOIN vuln_intel v ON v.cve_id = r.cve_id
 			WHERE r.product IN (`+placeholders+`)`, args...)
@@ -839,10 +896,10 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 			return nil, fmt.Errorf("匹配软件包失败: %w", err)
 		}
 		for rows.Next() {
-			var cveID, severity, published, product, si, se, ei, ee, patched string
+			var cveID, severity, published, vendor, product, si, se, ei, ee, patched string
 			var kev bool
 			var epss *float64
-			if err := rows.Scan(&cveID, &severity, &kev, &epss, &published, &product, &si, &se, &ei, &ee, &patched); err != nil {
+			if err := rows.Scan(&cveID, &severity, &kev, &epss, &published, &vendor, &product, &si, &se, &ei, &ee, &patched); err != nil {
 				rows.Close()
 				return nil, err
 			}
@@ -855,6 +912,16 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 			}
 			for _, ci := range matched {
 				cand := candidates[ci]
+				// vendor 可能是 CPE 厂商（pallets / ruby-lang），也可能是生态名（pypi）。
+				vNorm := NormalizeEcosystem(vendor)
+				// 语言生态包：只接受同生态的区间，或 CPE 区间（NVD 走厂商库也能覆盖到语言包）。
+				if cand.eco != "" && isEcosystemVendor(vendor) && vNorm != cand.eco {
+					continue
+				}
+				// 反过来：OS 包不该命中语言生态的区间（同名的 pip/npm 包不是系统包）。
+				if cand.eco == "" && isEcosystemVendor(vendor) {
+					continue
+				}
 				version := strings.TrimSpace(cand.pkg.Version)
 				bounds := rangeBounds{startIncl: si, startExcl: se, endIncl: ei, endExcl: ee}
 				upstreamIn := matchRangeDual(version, bounds, compareUpstream)
@@ -961,6 +1028,12 @@ func productCandidates(name string) []string {
 			delete(set, p)
 		}
 	}
+	// 同理：ruby-sdbm 是 gem，不是 ruby 解释器；rubygems-* 也不是 rubygems 本体。
+	if strings.HasPrefix(name, "ruby-") || strings.HasPrefix(name, "rubygems") {
+		for _, p := range []string{"ruby", "gem", "rubygems"} {
+			delete(set, p)
+		}
+	}
 	out := make([]string, 0, len(set))
 	for k := range set {
 		out = append(out, k)
@@ -1060,4 +1133,30 @@ func normalizeRangeSource(src string) string {
 		return v
 	}
 	return "nvd"
+}
+
+// NormalizeEcosystem 把各来源的生态写法收敛成同一套键。
+//
+// 必要性：GitHub 写 "pip"/"rust"/"composer"，OSV 转储目录写 "PyPI"/"crates.io"/"Packagist"，
+// 主机清单写 "pip"/"npm"/"gem"。不归一化的话，GHSA 的 pip 区间永远匹配不到 pip 包。
+func NormalizeEcosystem(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "pip", "pypi", "python":
+		return "pypi"
+	case "npm", "node", "nodejs":
+		return "npm"
+	case "rubygems", "gem", "ruby":
+		return "rubygems"
+	case "go", "gomod", "golang":
+		return "go"
+	case "crates.io", "cargo", "rust", "crates":
+		return "crates.io"
+	case "packagist", "composer", "php":
+		return "packagist"
+	case "maven", "java":
+		return "maven"
+	case "nuget", "dotnet":
+		return "nuget"
+	}
+	return strings.ToLower(strings.TrimSpace(s))
 }

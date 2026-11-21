@@ -28,6 +28,8 @@ type Config struct {
 	POCEnabled   bool          // 是否为 KEV / 近期高危聚合 GitHub PoC
 	EPSSEnabled  bool          // 是否同步 EPSS
 	GHSAEnabled  bool          // 是否同步 GHSA（需 GitHub 出网；token 可选）
+	OSVEnabled   bool          // 是否导入 OSV 生态全量包（语言包精确匹配的数据来源）
+	OSVForce     bool          // 手动触发时忽略游标，全量重导一遍
 
 	// NVDEnabled 为 nil 时默认开启；单源同步（只拉 KEV/EPSS）必须关掉，
 	// 否则会顺带跑一次 NVD 全量回填。
@@ -38,6 +40,7 @@ type Config struct {
 	NVDBaseURL   string
 	EPSSBaseURL  string
 	GitHubAPIURL string
+	OSVBaseURL   string
 }
 
 func (c Config) nvdOn() bool {

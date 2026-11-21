@@ -466,15 +466,31 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 			EPSSEnabled:  ic.VulnIntelEPSSOn(),
 			GHSAEnabled:  ic.VulnIntelGHSAOn(),
 			POCEnabled:   ic.VulnIntelPOCon(),
+			OSVEnabled:   ic.VulnIntelOSVOn(),
+			OSVBaseURL:   ic.OSVBaseURL,
 		}
 		// 单源模式只跑该源，便于前端/运维做冒烟与增量刷新。
 		switch source {
+		case "osv":
+			off := false
+			syncCfg.NVDEnabled = &off
+			syncCfg.EPSSEnabled = false
+			syncCfg.GHSAEnabled = false
+			syncCfg.POCEnabled = false
+			syncCfg.OSVEnabled = true
+			syncCfg.OSVForce = true // 手动触发走全量重导，不受上次游标影响
+			syncCfg.MaxRuntime = 6 * time.Hour // 全量生态包体量大，给足时间
+			// 全量导入可能跑几小时，不能绑在请求 ctx 上：前端断开不应中止导入。
+			var cancelOSV context.CancelFunc
+			ctx, cancelOSV = context.WithTimeout(context.Background(), syncCfg.MaxRuntime)
+			defer cancelOSV()
 		case "kev", "nvd", "epss", "ghsa", "poc":
 			onlyNVD := source == "nvd"
 			syncCfg.NVDEnabled = &onlyNVD
 			syncCfg.EPSSEnabled = source == "epss"
 			syncCfg.GHSAEnabled = source == "ghsa"
 			syncCfg.POCEnabled = source == "poc"
+			syncCfg.OSVEnabled = false
 			if !onlyNVD {
 				syncCfg.MaxRuntime = 10 * time.Minute
 			}
@@ -515,6 +531,8 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 				EPSSEnabled:  ic.VulnIntelEPSSOn(),
 				GHSAEnabled:  ic.VulnIntelGHSAOn(),
 				POCEnabled:   ic.VulnIntelPOCon(),
+				OSVEnabled:   ic.VulnIntelOSVOn(),
+				OSVBaseURL:   ic.OSVBaseURL,
 			}, func(format string, a ...interface{}) { log.Logger.Info(fmt.Sprintf(format, a...)) })
 			runCtx, cancel := context.WithTimeout(context.Background(), ic.VulnIntelMaxRuntime())
 			sum, err := syncer.Run(runCtx)

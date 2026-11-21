@@ -184,6 +184,7 @@ var denyProductByPackage = map[string][]string{
 	"python3-debian":     {"python", "python2", "python3"},
 	"python3-pip":        {"python", "python2", "python3"},
 	"python3-setuptools": {"python", "python2", "python3"},
+	"rubygems-integration": {"rubygems", "ruby", "gem"},
 }
 
 // aliasProductByPackage 给内核镜像类包补上内核产品名（截断规则本身产不出 linux_kernel）。

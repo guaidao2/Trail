@@ -70,12 +70,15 @@ type VulnIntelConfig struct {
 	EPSS         *bool  `yaml:"epss,omitempty" json:"epss,omitempty"`                     // 默认开启
 	GHSA         *bool  `yaml:"ghsa,omitempty" json:"ghsa,omitempty"`                     // 默认开启
 	POC          *bool  `yaml:"poc,omitempty" json:"poc,omitempty"`                       // 默认关闭
+	OSV          *bool  `yaml:"osv,omitempty" json:"osv,omitempty"`                       // 默认开启：语言生态全量
+	OSVBaseURL   string `yaml:"osv_base_url,omitempty" json:"osv_base_url,omitempty"`     // 转储地址，可指向内网镜像
 }
 
 // VulnIntelEPSSOn / GHSAOn / POCon 把三态开关折叠成布尔（nil 取默认）。
 func (v VulnIntelConfig) VulnIntelEPSSOn() bool { return boolOr(v.EPSS, true) }
 func (v VulnIntelConfig) VulnIntelGHSAOn() bool { return boolOr(v.GHSA, true) }
 func (v VulnIntelConfig) VulnIntelPOCon() bool  { return boolOr(v.POC, false) }
+func (v VulnIntelConfig) VulnIntelOSVOn() bool  { return boolOr(v.OSV, true) }
 
 func boolOr(p *bool, def bool) bool {
 	if p == nil {

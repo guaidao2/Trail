@@ -142,6 +142,40 @@ func TestGHSAToIntel(t *testing.T) {
 	}
 }
 
+// TestGHSAFirstPatchedForms 覆盖 first_patched_version 的真实形态：
+// 真实接口是字符串（162 条）+ null（9 条），对象形态反而是历史包袱。
+// 之前只测了对象形态，所以线上按字符串返回时整页解码失败、GHSA 一直 0 条。
+func TestGHSAFirstPatchedForms(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"string", `"1.3.2"`, "1.3.2"},
+		{"null", `null`, ""},
+		{"object-legacy", `{"identifier":"1.2.3"}`, "1.2.3"},
+		{"number", `123`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := `{"ghsa_id":"GHSA-1","cve_id":"CVE-2024-1","summary":"s","severity":"high",
+				"vulnerabilities":[{"package":{"ecosystem":"rubygems","name":"safemode"},
+				"vulnerable_version_range":"< 1.3.2","first_patched_version":` + tc.raw + `}]}`
+			var a ghsaAdvisory
+			if err := json.Unmarshal([]byte(payload), &a); err != nil {
+				t.Fatalf("解析失败: %v", err)
+			}
+			_, ranges, ok := ghsaToIntel(a)
+			if !ok || len(ranges) != 1 {
+				t.Fatalf("应解析出 1 条区间，实际 ok=%v ranges=%+v", ok, ranges)
+			}
+			if ranges[0].PatchedVersion != tc.want {
+				t.Fatalf("修复版本应为 %q，实际 %q", tc.want, ranges[0].PatchedVersion)
+			}
+		})
+	}
+}
+
 func TestPageDelayFor(t *testing.T) {
 	if got := PageDelayFor(""); got != 6500*time.Millisecond {
 		t.Fatalf("匿名间隔应为 6.5s，实际 %v", got)

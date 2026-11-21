@@ -18,6 +18,7 @@ type Summary struct {
 	NVD   int      `json:"nvd"`
 	EPSS  int      `json:"epss"`
 	GHSA  int      `json:"ghsa"`
+	OSV   int      `json:"osv"`
 	POC   int      `json:"poc"`
 	Errors []string `json:"errors,omitempty"`
 	StartedAt  time.Time `json:"started_at"`
@@ -74,6 +75,14 @@ func (s *Syncer) Run(ctx context.Context) (Summary, error) {
 		if err := s.syncGHSA(ctx, &sum); err != nil {
 			s.logf("[vulnintel] GHSA 同步失败: %v", err)
 			errs = append(errs, fmt.Errorf("ghsa: %w", err))
+		}
+	}
+	if s.cfg.OSVEnabled {
+		if n, err := s.syncOSV(ctx); err != nil {
+			s.logf("[vulnintel] OSV 导入失败: %v", err)
+			errs = append(errs, fmt.Errorf("osv: %w", err))
+		} else {
+			sum.OSV = n
 		}
 	}
 	if s.cfg.POCEnabled {
@@ -278,10 +287,14 @@ func (s *Syncer) syncGHSA(ctx context.Context, sum *Summary) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		items, err := fetchGHSA(ctx, s.c, s.cfg.githubBase(), s.cfg.GitHubToken, since, page, 100)
+		items, skipped, err := fetchGHSA(ctx, s.c, s.cfg.githubBase(), s.cfg.GitHubToken, since, page, 100)
 		if err != nil {
 			_ = s.recordError("ghsa", err)
 			return err
+		}
+		if skipped > 0 {
+			// 形状不认识的公告只跳过这一条：不能让一页里的个别脏数据把整轮同步打回原点。
+			s.logf("ghsa: 本页跳过 %d 条无法解析的公告", skipped)
 		}
 		if len(items) == 0 {
 			break
