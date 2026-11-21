@@ -84,3 +84,6 @@ desktop.ini
 
 # Local scratch (temporary scripts, never published)
 scratch/
+
+# local handoff notes
+AGENTS.md

@@ -10,15 +10,6 @@ function tokenUsageText(key, opts, fallback) {
     return fallback == null ? key : fallback;
 }
 
-function openDashboardTokenUsage() {
-    if (window.location.hash === '#settings?section=token-usage') {
-        switchPage('settings');
-        switchSettingsSection('token-usage');
-    } else {
-        window.location.hash = 'settings?section=token-usage';
-    }
-}
-
 function stopTokenUsageRequests() {
     tokenUsageState.requestSequence++;
     if (tokenUsageState.controller) tokenUsageState.controller.abort();

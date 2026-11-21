@@ -66,7 +66,7 @@ Permissions use `module:action`. Common actions are `read`, `write`, `delete`, a
 | Module | Permissions |
 |--------|-------------|
 | Account | `auth:self` |
-| Dashboard | `dashboard:read` |
+| Dashboard | `host:read` (data comes from the host situation endpoint) |
 | Chat | `chat:read`, `chat:write`, `chat:delete` |
 | Agent | `agent:execute`, `agent:local-execute` |
 | HITL | `hitl:read`, `hitl:write` |
@@ -216,7 +216,7 @@ System roles are immutable; create a custom role instead of modifying them.
 
 ```text
 Scope: assigned
-dashboard:read
+host:read
 chat:read
 host group:read
 vulnerability:read

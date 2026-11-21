@@ -73,7 +73,7 @@ AI 测试角色不是安全授权边界。即使选择了“安全巡检”角�
 | 模块 | 权限 |
 |------|------|
 | 账号 | `auth:self` |
-| 仪表盘 | `dashboard:read` |
+| 仪表盘 | `host:read`（数据来自主机态势接口） |
 | 对话 | `chat:read`、`chat:write`、`chat:delete` |
 | Agent | `agent:execute`、`agent:local-execute` |
 | HITL | `hitl:read`、`hitl:write` |
@@ -224,7 +224,7 @@ project:write → own
 
 ```text
 Scope: assigned
-dashboard:read
+host:read
 chat:read
 project:read
 vulnerability:read
