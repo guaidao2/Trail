@@ -264,7 +264,8 @@
     "settings": "系统设置",
     "hitl": "人机协同",
     "platformRbac": "平台权限",
-    "hosts": "主机管理"
+    "hosts": "主机管理",
+    "wall": "攻防大屏"
   },
   "navGroups": {
     "workbench": "工作台",

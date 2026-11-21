@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#03060d">
+    <title>攻防态势大屏 - 溯痕 Trail</title>
+    <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+    <link rel="stylesheet" href="/static/css/wall.css">
+
+    <!-- three.js r160 已离线 vendor，importmap 让 addons 里的 'three' 裸导入落到本地文件。
+         禁止 CDN：整页不发任何外网请求。 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "/static/vendor/three/build/three.module.js",
+                "three/addons/": "/static/vendor/three/addons/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="wall-root">
+        <!-- 3D 舞台：canvas 由 wall.mjs 创建后挂到这里 -->
+        <div id="wall-stage" class="wall-stage" aria-hidden="true"></div>
+
+        <!-- 纯装饰覆盖层：经纬网格、扫描线、扫描光带、暗角 -->
+        <div class="wall-grid-overlay" aria-hidden="true"></div>
+        <div class="wall-scanlines" aria-hidden="true"></div>
+        <div class="wall-sweep" aria-hidden="true"></div>
+        <div class="wall-vignette" aria-hidden="true"></div>
+
+        <header class="wall-header">
+            <div class="wall-header__side">
+                <a class="wall-chip wall-chip--link" href="/" title="返回控制台">← 返回控制台</a>
+                <span class="wall-chip">AWD 攻防沙盘</span>
+                <span class="wall-chip wall-chip--status" id="wall-status-chip">连接中</span>
+            </div>
+            <div class="wall-title">
+                <h1>攻防态势大屏</h1>
+                <p class="wall-title__meta" id="wall-generated">正在读取态势数据…</p>
+            </div>
+            <div class="wall-header__side wall-header__side--right">
+                <span class="wall-chip" id="wall-clock">--:--:--</span>
+                <span class="wall-chip" id="wall-version">{{.Version}}</span>
+            </div>
+        </header>
+
+        <section class="wall-panel wall-panel--stats" id="wall-panel-stats" aria-label="全局态势">
+            <h2 class="wall-panel__title">全局态势</h2>
+            <div class="wall-stat-grid" id="wall-stat-grid"></div>
+            <div class="wall-legend">
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#ff3b5c"></i>严重</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#ff8a3d"></i>高</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#ffd24a"></i>中</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#4aa8ff"></i>低</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#8a94a6"></i>信息</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#ffd24a"></i>情报观察</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#ff8a3d"></i>情报确认</span>
+                <span class="wall-legend__item"><i class="wall-legend__dot" style="--dot:#5c6773"></i>已封禁</span>
+            </div>
+        </section>
+
+        <section class="wall-panel wall-panel--risk" id="wall-panel-risk" aria-label="Top 风险主机">
+            <h2 class="wall-panel__title">Top 风险主机</h2>
+            <ol class="wall-risk-list" id="wall-risk-list"></ol>
+        </section>
+
+        <div class="wall-ticker" id="wall-ticker" aria-label="实时事件">
+            <span class="wall-ticker__label">实时事件</span>
+            <div class="wall-ticker__view">
+                <div class="wall-ticker__track" id="wall-ticker-track"></div>
+            </div>
+        </div>
+
+        <div class="wall-hint">
+            <div>拖拽旋转 · 滚轮缩放 · 悬停查看详情</div>
+            <div>点击主机节点 → 打开主机管理（<kbd>新标签</kbd>）</div>
+        </div>
+
+        <div class="wall-tooltip" id="wall-tooltip" hidden></div>
+        <div class="wall-notice" id="wall-notice" hidden></div>
+
+        <noscript>
+            <div class="wall-notice">攻防态势大屏需要 JavaScript 才能渲染三维沙盘，请启用后重试。</div>
+        </noscript>
+    </div>
+
+    <!-- 大屏脚本以 ES module 形式加载（.mjs 便于 node --check 做语法检查）。
+         加载失败时（静态资源 404 或 MIME 不对）给出提示，不让页面静默白屏。 -->
+    <script type="module" src="/static/js/wall.mjs"
+            onerror="(function(){var n=document.getElementById('wall-notice');if(!n)return;n.hidden=false;n.textContent='态势脚本 /static/js/wall.mjs 加载失败：请检查静态资源是否可访问、服务器是否以 JavaScript MIME 类型返回 .mjs。';})()"></script>
+</body>
+</html>

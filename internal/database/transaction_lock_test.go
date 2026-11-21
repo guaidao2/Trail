@@ -1,3 +1,8 @@
+//go:build cgo
+
+// 该用例直接断言 go-sqlite3 的错误类型（sqlite3.Error / ErrBusy），
+// 需要 cgo；无 cgo 的环境下跳过，避免把环境限制报成编译错误。
+
 package database
 
 import (

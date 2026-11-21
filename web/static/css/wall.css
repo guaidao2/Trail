@@ -1,0 +1,875 @@
+/* ==========================================================================
+ * 攻防态势大屏 / AWD 沙盘 —— 独立全屏页面样式
+ *
+ * 这个页面刻意不引用 style.css：大屏投屏需要固定的深色全息配色，
+ * 不能被主界面的主题切换、侧边栏布局、弹窗规则干扰。
+ * 所有颜色、字体、动效都在这里自包含，且不加载任何外部字体/CDN。
+ * ========================================================================== */
+
+:root {
+    /* 底色：从近黑蓝到深青，让辉光有地方“吃” */
+    --wall-bg-top: #071726;
+    --wall-bg-mid: #03060d;
+    --wall-bg-bottom: #01030a;
+
+    /* 全息主色 */
+    --wall-cyan: #4fd6ff;
+    --wall-cyan-soft: rgba(79, 214, 255, 0.28);
+    --wall-line: rgba(79, 214, 255, 0.18);
+    --wall-line-strong: rgba(79, 214, 255, 0.42);
+
+    /* 文本 */
+    --wall-text: #d7e6f5;
+    --wall-text-dim: #7f93a8;
+    --wall-text-bright: #eaf7ff;
+
+    /* 严重度色板（与 3D 场景保持同一套值，见 wall.mjs SEVERITY_HEX） */
+    --wall-critical: #ff3b5c;
+    --wall-high: #ff8a3d;
+    --wall-medium: #ffd24a;
+    --wall-low: #4aa8ff;
+    --wall-info: #8a94a6;
+
+    /* 面板 */
+    --wall-panel-bg: linear-gradient(158deg, rgba(8, 24, 42, 0.88), rgba(2, 8, 18, 0.74));
+    --wall-panel-shadow: inset 0 0 34px rgba(44, 148, 214, 0.1), 0 12px 44px rgba(0, 0, 0, 0.55);
+
+    /* 字体：全部使用系统栈，避免外网字体请求 */
+    --wall-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+        "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --wall-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Courier New", monospace;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    color: var(--wall-text);
+    font-family: var(--wall-font);
+    background:
+        radial-gradient(ellipse 70% 55% at 50% 44%, rgba(14, 54, 84, 0.55) 0%, rgba(3, 8, 16, 0) 62%),
+        linear-gradient(180deg, var(--wall-bg-top) 0%, var(--wall-bg-mid) 46%, var(--wall-bg-bottom) 100%);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+#wall-root {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    cursor: default;
+}
+
+/* ---- 3D 舞台 ---------------------------------------------------------- */
+
+.wall-stage {
+    position: absolute;
+    inset: 0;
+}
+
+.wall-stage canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* ---- 覆盖层（全部 pointer-events: none，交互只留给 canvas） ----------- */
+
+.wall-grid-overlay,
+.wall-scanlines,
+.wall-sweep,
+.wall-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.wall-grid-overlay {
+    background-image:
+        linear-gradient(rgba(79, 214, 255, 0.055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 214, 255, 0.055) 1px, transparent 1px);
+    background-size: 72px 72px, 72px 72px;
+    -webkit-mask-image: radial-gradient(ellipse 78% 68% at 50% 46%, #000 12%, rgba(0, 0, 0, 0.35) 58%, transparent 86%);
+    mask-image: radial-gradient(ellipse 78% 68% at 50% 46%, #000 12%, rgba(0, 0, 0, 0.35) 58%, transparent 86%);
+    opacity: 0.55;
+    animation: wall-grid-drift 26s linear infinite;
+}
+
+@keyframes wall-grid-drift {
+    from {
+        background-position: 0 0, 0 0;
+    }
+    to {
+        background-position: 0 72px, 72px 0;
+    }
+}
+
+.wall-scanlines {
+    background: repeating-linear-gradient(
+        180deg,
+        rgba(150, 220, 255, 0.045) 0,
+        rgba(150, 220, 255, 0.045) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+    opacity: 0.7;
+    mix-blend-mode: screen;
+}
+
+.wall-sweep {
+    background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(79, 214, 255, 0.05) 40%,
+        rgba(79, 214, 255, 0.16) 50%,
+        rgba(79, 214, 255, 0.05) 60%,
+        transparent 100%
+    );
+    background-size: 100% 38vh;
+    background-repeat: no-repeat;
+    background-position: 0 -40vh;
+    mix-blend-mode: screen;
+    opacity: 0.6;
+    animation: wall-sweep-move 11s linear infinite;
+}
+
+@keyframes wall-sweep-move {
+    from {
+        background-position: 0 -40vh;
+    }
+    to {
+        background-position: 0 108vh;
+    }
+}
+
+.wall-vignette {
+    background:
+        radial-gradient(ellipse 84% 76% at 50% 48%, transparent 42%, rgba(0, 2, 6, 0.52) 82%, rgba(0, 1, 4, 0.86) 100%);
+}
+
+/* ---- 顶部标题 --------------------------------------------------------- */
+
+.wall-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 86px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 0 28px;
+    pointer-events: none;
+}
+
+.wall-header__side {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    /* 顶栏整体 pointer-events: none（避免挡住画布拖拽），
+       里面的可交互元素必须显式收回事件。 */
+    pointer-events: auto;
+}
+
+.wall-header__side--right {
+    justify-content: flex-end;
+}
+
+.wall-title {
+    position: relative;
+    text-align: center;
+    padding: 0 26px;
+}
+
+.wall-title h1 {
+    margin: 0;
+    font-size: clamp(18px, 1.65vw, 30px);
+    font-weight: 600;
+    letter-spacing: 0.34em;
+    text-indent: 0.34em;
+    color: var(--wall-text-bright);
+    text-shadow:
+        0 0 12px rgba(79, 214, 255, 0.65),
+        0 0 42px rgba(42, 140, 210, 0.45);
+    white-space: nowrap;
+}
+
+.wall-title::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -10px;
+    width: 132%;
+    height: 1px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, transparent, rgba(79, 214, 255, 0.62), transparent);
+}
+
+.wall-title__meta {
+    margin: 6px 0 0;
+    font-family: var(--wall-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--wall-text-dim);
+    white-space: nowrap;
+}
+
+.wall-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 26px;
+    padding: 0 11px;
+    border: 1px solid var(--wall-line);
+    border-radius: 2px;
+    background: rgba(8, 30, 50, 0.55);
+    font-family: var(--wall-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    color: #9fd8f5;
+    white-space: nowrap;
+}
+
+.wall-chip--link {
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
+}
+
+.wall-chip--link:hover {
+    color: var(--wall-text-bright);
+    border-color: rgba(79, 214, 255, 0.55);
+    background: rgba(79, 214, 255, 0.12);
+}
+
+.wall-chip--status::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #35e08a;
+    box-shadow: 0 0 9px #35e08a;
+    animation: wall-dot-pulse 2.2s ease-in-out infinite;
+}
+
+.wall-chip--status.is-stale::before {
+    background: var(--wall-high);
+    box-shadow: 0 0 9px var(--wall-high);
+}
+
+.wall-chip--status.is-error::before {
+    background: var(--wall-critical);
+    box-shadow: 0 0 9px var(--wall-critical);
+}
+
+@keyframes wall-dot-pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.45;
+        transform: scale(0.82);
+    }
+}
+
+/* ---- 面板通用 --------------------------------------------------------- */
+
+.wall-panel {
+    position: absolute;
+    padding: 14px 16px 16px;
+    background: var(--wall-panel-bg);
+    border: 1px solid var(--wall-line);
+    border-radius: 3px;
+    box-shadow: var(--wall-panel-shadow);
+    -webkit-backdrop-filter: blur(7px);
+    backdrop-filter: blur(7px);
+    animation: wall-panel-in 700ms cubic-bezier(0.22, 0.8, 0.2, 1) both;
+    pointer-events: none;
+}
+
+/* 左上 / 右下 切角高亮，科技面板的“焊点” */
+.wall-panel::before,
+.wall-panel::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
+
+.wall-panel::before {
+    top: -1px;
+    left: -1px;
+    border-top: 2px solid var(--wall-line-strong);
+    border-left: 2px solid var(--wall-line-strong);
+}
+
+.wall-panel::after {
+    right: -1px;
+    bottom: -1px;
+    border-right: 2px solid var(--wall-line-strong);
+    border-bottom: 2px solid var(--wall-line-strong);
+}
+
+@keyframes wall-panel-in {
+    from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.wall-panel__title {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 13px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: #bfe6ff;
+    white-space: nowrap;
+}
+
+.wall-panel__title::before {
+    content: "";
+    width: 3px;
+    height: 13px;
+    background: linear-gradient(180deg, var(--wall-cyan), rgba(79, 214, 255, 0));
+    box-shadow: 0 0 10px rgba(79, 214, 255, 0.9);
+}
+
+.wall-panel__title::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(79, 214, 255, 0.34), transparent);
+}
+
+/* ---- 左上：全局态势 --------------------------------------------------- */
+
+.wall-panel--stats {
+    top: 96px;
+    left: 26px;
+    width: 384px;
+}
+
+.wall-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 14px;
+}
+
+.wall-stat {
+    position: relative;
+    padding: 6px 0 6px 10px;
+    border-left: 1px solid rgba(79, 214, 255, 0.16);
+    min-width: 0;
+}
+
+.wall-stat__label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--wall-text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wall-stat__value {
+    display: block;
+    margin-top: 3px;
+    font-family: var(--wall-mono);
+    font-size: clamp(22px, 1.9vw, 34px);
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--wall-text-bright);
+    text-shadow: 0 0 16px rgba(120, 200, 255, 0.35);
+    transition: color 240ms ease, text-shadow 240ms ease;
+}
+
+.wall-stat--critical .wall-stat__value {
+    color: var(--wall-critical);
+    text-shadow: 0 0 18px rgba(255, 59, 92, 0.62);
+}
+
+.wall-stat--high .wall-stat__value {
+    color: var(--wall-high);
+    text-shadow: 0 0 18px rgba(255, 138, 61, 0.55);
+}
+
+.wall-stat--medium .wall-stat__value {
+    color: var(--wall-medium);
+    text-shadow: 0 0 16px rgba(255, 210, 74, 0.45);
+}
+
+.wall-stat--low .wall-stat__value {
+    color: var(--wall-low);
+    text-shadow: 0 0 16px rgba(74, 168, 255, 0.5);
+}
+
+.wall-stat__value.is-bump {
+    animation: wall-bump 720ms ease-out;
+}
+
+@keyframes wall-bump {
+    0% {
+        transform: translateY(0);
+        filter: brightness(2.1);
+    }
+    55% {
+        transform: translateY(-2px);
+        filter: brightness(1.35);
+    }
+    100% {
+        transform: translateY(0);
+        filter: brightness(1);
+    }
+}
+
+.wall-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(79, 214, 255, 0.12);
+    font-size: 11px;
+    color: var(--wall-text-dim);
+    letter-spacing: 0.06em;
+}
+
+.wall-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.wall-legend__dot {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--dot, var(--wall-info));
+    box-shadow: 0 0 9px var(--dot, var(--wall-info));
+}
+
+/* ---- 右侧：Top 风险主机 ---------------------------------------------- */
+
+.wall-panel--risk {
+    top: 96px;
+    right: 26px;
+    width: 336px;
+}
+
+.wall-risk-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wall-risk-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 2px 10px;
+    padding: 7px 9px 8px;
+    border-left: 2px solid var(--risk-color, var(--wall-info));
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0));
+    animation: wall-risk-in 420ms ease-out both;
+}
+
+@keyframes wall-risk-in {
+    from {
+        opacity: 0;
+        transform: translateX(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.wall-risk-item__name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--wall-text-bright);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wall-risk-item__ip {
+    font-family: var(--wall-mono);
+    font-size: 11px;
+    color: var(--wall-text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wall-risk-item__score {
+    font-family: var(--wall-mono);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--risk-color, var(--wall-info));
+    text-shadow: 0 0 14px color-mix(in srgb, var(--risk-color, #8a94a6) 60%, transparent);
+    text-align: right;
+    grid-row: span 2;
+    align-self: center;
+}
+
+.wall-risk-item__meta {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 3px;
+    font-family: var(--wall-mono);
+    font-size: 10.5px;
+    color: var(--wall-text-dim);
+}
+
+.wall-risk-bar {
+    position: relative;
+    flex: 1 1 auto;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.09);
+    overflow: hidden;
+}
+
+.wall-risk-bar > i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--risk-fill, 0%);
+    background: var(--risk-color, var(--wall-info));
+    box-shadow: 0 0 12px var(--risk-color, var(--wall-info));
+    transition: width 620ms cubic-bezier(0.22, 0.8, 0.2, 1);
+}
+
+.wall-risk-empty,
+.wall-stat-empty {
+    font-size: 12px;
+    color: var(--wall-text-dim);
+    letter-spacing: 0.08em;
+}
+
+/* ---- 底部事件滚动条 --------------------------------------------------- */
+
+.wall-ticker {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 46px;
+    display: flex;
+    align-items: stretch;
+    border-top: 1px solid var(--wall-line);
+    background: linear-gradient(180deg, rgba(2, 10, 20, 0.25), rgba(2, 8, 16, 0.9));
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
+.wall-ticker__label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 16px;
+    font-size: 11.5px;
+    letter-spacing: 0.18em;
+    color: #bfe6ff;
+    border-right: 1px solid var(--wall-line);
+    white-space: nowrap;
+}
+
+.wall-ticker__label::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wall-critical);
+    box-shadow: 0 0 10px var(--wall-critical);
+    animation: wall-dot-pulse 1.7s ease-in-out infinite;
+}
+
+.wall-ticker__view {
+    position: relative;
+    flex: 1 1 auto;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+}
+
+.wall-ticker__track {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    white-space: nowrap;
+    will-change: transform;
+    animation: wall-ticker-run 68s linear infinite;
+}
+
+@keyframes wall-ticker-run {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+.wall-ticker__group {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    padding-right: 30px;
+}
+
+.wall-ticker__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 46vw;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--wall-text);
+}
+
+.wall-ticker__time {
+    font-family: var(--wall-mono);
+    font-size: 11px;
+    color: var(--wall-text-dim);
+}
+
+.wall-ticker__sev {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sev-color, var(--wall-info));
+    box-shadow: 0 0 9px var(--sev-color, var(--wall-info));
+    flex: 0 0 auto;
+}
+
+.wall-ticker__host {
+    font-family: var(--wall-mono);
+    font-size: 11px;
+    padding: 1px 6px;
+    border: 1px solid rgba(79, 214, 255, 0.22);
+    border-radius: 2px;
+    color: #9fd8f5;
+}
+
+.wall-ticker__empty {
+    font-size: 12px;
+    color: var(--wall-text-dim);
+    letter-spacing: 0.12em;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    height: 100%;
+}
+
+/* ---- 提示 / 无数据 / WebGL 不可用 ------------------------------------ */
+
+.wall-notice {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    max-width: min(76vw, 620px);
+    padding: 16px 26px;
+    border: 1px dashed rgba(255, 138, 61, 0.5);
+    border-radius: 3px;
+    background: rgba(24, 10, 4, 0.58);
+    color: #ffcf9e;
+    font-size: 13.5px;
+    line-height: 1.7;
+    letter-spacing: 0.08em;
+    text-align: center;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+.wall-notice[hidden] {
+    display: none;
+}
+
+/* ---- 鼠标悬停节点 tooltip -------------------------------------------- */
+
+.wall-tooltip {
+    position: fixed;
+    z-index: 40;
+    top: 0;
+    left: 0;
+    min-width: 190px;
+    max-width: 300px;
+    padding: 10px 12px 11px;
+    border: 1px solid rgba(79, 214, 255, 0.45);
+    border-radius: 2px;
+    background: rgba(3, 14, 26, 0.94);
+    box-shadow: 0 0 26px rgba(24, 120, 200, 0.35), inset 0 0 18px rgba(24, 120, 200, 0.12);
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--wall-text);
+    pointer-events: none;
+}
+
+.wall-tooltip[hidden] {
+    display: none;
+}
+
+.wall-tooltip__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--wall-text-bright);
+    margin-bottom: 6px;
+}
+
+.wall-tooltip__row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 14px;
+    font-family: var(--wall-mono);
+    font-size: 11.5px;
+    color: var(--wall-text-dim);
+}
+
+.wall-tooltip__row b {
+    font-weight: 600;
+    color: var(--wall-text);
+}
+
+.wall-tooltip__hint {
+    margin-top: 7px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(79, 214, 255, 0.16);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: rgba(79, 214, 255, 0.72);
+}
+
+/* ---- 右下角操作提示 --------------------------------------------------- */
+
+.wall-hint {
+    position: absolute;
+    right: 28px;
+    bottom: 62px;
+    font-family: var(--wall-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: rgba(127, 147, 168, 0.85);
+    text-align: right;
+    line-height: 1.9;
+    pointer-events: none;
+}
+
+.wall-hint kbd {
+    display: inline-block;
+    padding: 0 5px;
+    border: 1px solid rgba(79, 214, 255, 0.25);
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 10.5px;
+    color: #9fd8f5;
+}
+
+/* ---- 响应式：窄屏 / 矮屏适度收缩，保证大屏优先 ------------------------ */
+
+@media (max-width: 1440px) {
+    .wall-panel--stats {
+        width: 336px;
+    }
+    .wall-panel--risk {
+        width: 296px;
+    }
+}
+
+@media (max-width: 1180px) {
+    .wall-panel--stats {
+        width: 300px;
+        padding: 12px 13px 13px;
+    }
+    .wall-panel--risk {
+        width: 262px;
+    }
+    .wall-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .wall-header {
+        padding: 0 16px;
+    }
+    .wall-panel--stats,
+    .wall-panel--risk {
+        top: 84px;
+    }
+}
+
+@media (max-width: 900px) {
+    /* 小屏不再兼顾大屏信息密度：留态势图 + 精简统计 */
+    .wall-panel--risk,
+    .wall-hint {
+        display: none;
+    }
+    .wall-panel--stats {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        top: 76px;
+    }
+    .wall-title h1 {
+        letter-spacing: 0.18em;
+    }
+}
+
+@media (max-height: 760px) {
+    .wall-panel--stats,
+    .wall-panel--risk {
+        top: 78px;
+    }
+    .wall-legend {
+        display: none;
+    }
+}
+
+/* 尊重系统的“减少动态效果”，但不影响数据可读性 */
+@media (prefers-reduced-motion: reduce) {
+    .wall-grid-overlay,
+    .wall-sweep,
+    .wall-ticker__track,
+    .wall-chip--status::before,
+    .wall-ticker__label::before,
+    .wall-panel,
+    .wall-risk-item {
+        animation: none !important;
+    }
+}

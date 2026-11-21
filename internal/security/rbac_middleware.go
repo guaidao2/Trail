@@ -181,6 +181,9 @@ func permissionForRequest(method, fullPath string) string {
 			return "ioc:write"
 		}
 		return "ioc:read"
+	case strings.HasPrefix(path, "/wall"):
+		// 攻防态势大屏是只读展示，聚合的正是主机维度数据，因此跟随 host:read。
+		return "host:read"
 	case strings.HasPrefix(path, "/findings"):
 		// 发现的状态流转属于主机写的延伸；查询跟随主机读。
 		if method != "GET" {

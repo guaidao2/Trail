@@ -264,7 +264,8 @@
     "settings": "System settings",
     "hitl": "Human-in-the-loop",
     "platformRbac": "Platform Access",
-    "hosts": "Hosts"
+    "hosts": "Hosts",
+    "wall": "Cyber Wall"
   },
   "navGroups": {
     "workbench": "Workspace",

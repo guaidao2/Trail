@@ -1158,6 +1158,7 @@ func setupRoutes(
 		protected.GET("/hosts/:id/findings", hostHandler.ListFindings)
 		protected.GET("/hosts/:id/findings/summary", hostHandler.FindingSummary)
 		protected.PATCH("/findings/:id/status", security.RequirePermission("host:write"), hostHandler.UpdateFindingStatus)
+		protected.GET("/wall/graph", hostHandler.WallGraph)
 		protected.GET("/ioc", hostHandler.ListIOC)
 		protected.POST("/ioc", hostHandler.UpsertIOC)
 		protected.GET("/ioc/:id", hostHandler.GetIOC)
@@ -1498,6 +1499,15 @@ func setupRoutes(
 	// 静态文件
 	router.Static("/static", "./web/static")
 	router.LoadHTMLGlob("web/templates/*")
+
+	// 攻防态势大屏：独立页面（全屏、无侧边栏），与主界面互不影响
+	router.GET("/wall", func(c *gin.Context) {
+		version := app.config.Version
+		if version == "" {
+			version = "v1.0.0"
+		}
+		c.HTML(http.StatusOK, "wall.html", gin.H{"Version": version})
+	})
 
 	// 前端页面
 	router.GET("/", func(c *gin.Context) {

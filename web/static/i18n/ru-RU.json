@@ -262,7 +262,8 @@
     "settings": "Системные настройки",
     "hitl": "Одобрение человеком",
     "platformRbac": "Доступ к платформе",
-    "hosts": "Hosts"
+    "hosts": "Hosts",
+    "wall": "Кибер-стена"
   },
   "navGroups": {
     "workbench": "Рабочая область",

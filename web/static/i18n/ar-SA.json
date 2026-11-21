@@ -262,7 +262,8 @@
     "settings": "إعدادات النظام",
     "hitl": "التدخّل البشري (HITL)",
     "platformRbac": "الوصول إلى المنصّة",
-    "hosts": "Hosts"
+    "hosts": "Hosts",
+    "wall": "لوحة الدفاع والهجوم"
   },
   "navGroups": {
     "workbench": "مساحة العمل",
