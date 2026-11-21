@@ -4,7 +4,7 @@
 
 # 溯痕（CyberstrikeAI 蓝队版）
 
-> 英文名 **Trail** · 仓库 `guaidao2/Trail` · 版本 **v1.1.0**
+> 英文名 **Trail** · 仓库 `guaidao2/Trail` · 版本 **v1.2.0**
 
 [中文](README_CN.md) | [English](README.md)
 
@@ -14,7 +14,7 @@
 
 **从这里开始：** [快速上手](#快速上手一条命令部署) · [中文文档](docs/zh-CN/README.md) · [安全加固](docs/zh-CN/security-hardening.md)
 
-## 本版（v1.1.0）包含什么
+## 本版（v1.2.0）包含什么
 
 这是从 [CyberStrikeAI](https://github.com/Ed1s0nZ/CyberStrikeAI) 分叉后重构的第一个正式版本，定位为**纯蓝队/运维构建**：
 

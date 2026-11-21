@@ -27,6 +27,7 @@ import (
 	"trail/internal/logger"
 	"trail/internal/mcp"
 	"trail/internal/monitor"
+	"trail/internal/vulnintel"
 	"trail/internal/multiagent"
 	"trail/internal/robot"
 	"trail/internal/security"
@@ -182,6 +183,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerMemoryTools(mcpServer, db, log.Logger)
+	registerVulnIntelTools(mcpServer, db, hostSecretBox, cfg, log.Logger)
 
 	// 创建外部MCP管理器（使用与内部MCP服务器相同的存储）
 	externalMCPMgr := mcp.NewExternalMCPManagerWithStorage(log.Logger, db)
@@ -453,6 +455,78 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	vulnerabilityHandler.SetTaskStateProvider(agentHandler)
 	assetHandler := handler.NewAssetHandler(db, log.Logger)
 	hostHandler := handler.NewHostHandler(db, log.Logger, hostSecretBox)
+	hostHandler.SetVulnIntelSync(func(ctx context.Context, source string) (vulnintel.Summary, error) {
+		ic := vulnIntelCfgSnapshot()
+		syncCfg := vulnintel.Config{
+			NVDAPIKey:    ic.NVDAPIKey,
+			GitHubToken:  ic.GitHubToken,
+			ProxyURL:     ic.Proxy,
+			BackfillDays: ic.BackfillDays,
+			MaxRuntime:   ic.VulnIntelMaxRuntime(),
+			EPSSEnabled:  ic.VulnIntelEPSSOn(),
+			GHSAEnabled:  ic.VulnIntelGHSAOn(),
+			POCEnabled:   ic.VulnIntelPOCon(),
+		}
+		// 单源模式只跑该源，便于前端/运维做冒烟与增量刷新。
+		switch source {
+		case "kev", "nvd", "epss", "ghsa", "poc":
+			onlyNVD := source == "nvd"
+			syncCfg.NVDEnabled = &onlyNVD
+			syncCfg.EPSSEnabled = source == "epss"
+			syncCfg.GHSAEnabled = source == "ghsa"
+			syncCfg.POCEnabled = source == "poc"
+			if !onlyNVD {
+				syncCfg.MaxRuntime = 10 * time.Minute
+			}
+		}
+		syncer := vulnintel.New(db, syncCfg, func(format string, a ...interface{}) { log.Logger.Info(fmt.Sprintf(format, a...)) })
+		return syncer.Run(ctx)
+	})
+	hostHandler.SetVulnIntelImport(func(ctx context.Context, path, format string) (vulnintel.Summary, error) {
+		return vulnintel.ImportFile(ctx, db, path, format)
+	})
+	// 自动同步：按 vuln_intel.sync_interval 周期跑一轮；enabled 关掉时跳过。
+	// 每轮都重新读取 cfg.VulnIntel，设置页保存后下一轮即生效。
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		// 首次等满一个周期再跑：避免重启后就自动触发一次全量回填。
+		last := time.Now()
+		for range ticker.C {
+			if !cfg.VulnIntel.Enabled {
+				continue
+			}
+			interval := cfg.VulnIntel.VulnIntelSyncInterval()
+			if time.Since(last) < interval {
+				continue
+			}
+			// 与手动同步（REST / MCP 工具）互斥，避免同一游标被并发推进两次。
+			if !vulnIntelSyncMu.TryLock() {
+				continue
+			}
+			last = time.Now()
+			ic := vulnIntelCfgSnapshot()
+			syncer := vulnintel.New(db, vulnintel.Config{
+				NVDAPIKey:    ic.NVDAPIKey,
+				GitHubToken:  ic.GitHubToken,
+				ProxyURL:     ic.Proxy,
+				BackfillDays: ic.BackfillDays,
+				MaxRuntime:   ic.VulnIntelMaxRuntime(),
+				EPSSEnabled:  ic.VulnIntelEPSSOn(),
+				GHSAEnabled:  ic.VulnIntelGHSAOn(),
+				POCEnabled:   ic.VulnIntelPOCon(),
+			}, func(format string, a ...interface{}) { log.Logger.Info(fmt.Sprintf(format, a...)) })
+			runCtx, cancel := context.WithTimeout(context.Background(), ic.VulnIntelMaxRuntime())
+			sum, err := syncer.Run(runCtx)
+			cancel()
+			vulnIntelSyncMu.Unlock()
+			if err != nil {
+				log.Logger.Warn("漏洞情报自动同步失败", zap.Error(err), zap.Int("kev", sum.KEV), zap.Int("nvd", sum.NVD))
+			} else {
+				log.Logger.Info("漏洞情报自动同步完成", zap.Int("kev", sum.KEV), zap.Int("nvd", sum.NVD), zap.Int("epss", sum.EPSS))
+			}
+		}
+	}()
 	hostHandler.SetAudit(auditSvc)
 	hostHandler.SetInspectionScheduler(agentHandler)
 	rbacHandler := handler.NewRBACHandler(db, log.Logger)
@@ -465,6 +539,8 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	chatUploadsHandler := handler.NewChatUploadsHandler(log.Logger, db)
 	chatUploadsHandler.SetAudit(auditSvc)
 	configHandler := handler.NewConfigHandler(configPath, cfg, mcpServer, executor, agent, externalMCPMgr, log.Logger)
+	// 让后台同步协程与 MCP 工具通过读锁拿配置副本，避免与 UpdateConfig 的写入竞争。
+	vulnIntelCfgSnapshot = configHandler.VulnIntelSnapshot
 	configHandler.SetDB(db)
 	configHandler.SetToolGuard(toolGuard)
 	configHandler.SetAudit(auditSvc)
@@ -531,6 +607,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerMemoryTools(mcpServer, db, log.Logger)
+	registerVulnIntelTools(mcpServer, db, hostSecretBox, cfg, log.Logger)
 		return nil
 	}
 	configHandler.SetVulnerabilityToolRegistrar(vulnerabilityRegistrar)
@@ -1071,6 +1148,10 @@ func setupRoutes(
 		protected.GET("/memory", hostHandler.ListMemories)
 		protected.POST("/memory", hostHandler.UpsertMemory)
 		protected.DELETE("/memory/:id", hostHandler.DeleteMemory)
+		protected.GET("/vuln-intel", hostHandler.ListVulnIntel)
+		protected.GET("/vuln-intel/detail/:cve", hostHandler.GetVulnIntel)
+		protected.POST("/vuln-intel/sync", hostHandler.SyncVulnIntel)
+		protected.POST("/vuln-intel/import", hostHandler.ImportVulnIntel)
 
 		// 批量任务管理
 		protected.POST("/batch-tasks", agentHandler.CreateBatchQueue)

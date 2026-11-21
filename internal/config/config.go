@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"trail/internal/termout"
 	"trail/internal/toolguard"
@@ -50,6 +51,52 @@ type Config struct {
 	MultiAgent  MultiAgentConfig      `yaml:"multi_agent,omitempty" json:"multi_agent,omitempty"`
 	Vision      VisionConfig          `yaml:"vision,omitempty" json:"vision,omitempty"`
 	Update      UpdateConfig          `yaml:"update,omitempty" json:"update,omitempty"`
+	VulnIntel   VulnIntelConfig       `yaml:"vuln_intel,omitempty" json:"vuln_intel,omitempty"`
+}
+
+// VulnIntelConfig 是漏洞情报在线同步配置。
+//
+// 来源固定为主流公开源：CISA KEV（在野利用）、NVD 2.0（CVE 主体与版本区间）、
+// EPSS（利用概率）、GHSA（版本区间补充）、GitHub PoC 聚合。
+// 只有 enabled=true 才会启动同步；EPSS/GHSA/PoC 各自可单独关闭。
+type VulnIntelConfig struct {
+	Enabled      bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	NVDAPIKey    string `yaml:"nvd_api_key,omitempty" json:"nvd_api_key,omitempty"`       // 可选，匿名 5 次/30s
+	GitHubToken  string `yaml:"github_token,omitempty" json:"github_token,omitempty"`     // 可选，GHSA/PoC 提速
+	Proxy        string `yaml:"proxy,omitempty" json:"proxy,omitempty"`                   // 出口代理（内网部署常用）
+	BackfillDays int    `yaml:"backfill_days,omitempty" json:"backfill_days,omitempty"`   // 首跑回看天数，0=从 1988 年回填
+	SyncInterval string `yaml:"sync_interval,omitempty" json:"sync_interval,omitempty"`   // 默认 24h
+	MaxRuntime   string `yaml:"max_runtime,omitempty" json:"max_runtime,omitempty"`       // 单轮上限，默认 30m
+	EPSS         *bool  `yaml:"epss,omitempty" json:"epss,omitempty"`                     // 默认开启
+	GHSA         *bool  `yaml:"ghsa,omitempty" json:"ghsa,omitempty"`                     // 默认开启
+	POC          *bool  `yaml:"poc,omitempty" json:"poc,omitempty"`                       // 默认关闭
+}
+
+// VulnIntelEPSSOn / GHSAOn / POCon 把三态开关折叠成布尔（nil 取默认）。
+func (v VulnIntelConfig) VulnIntelEPSSOn() bool { return boolOr(v.EPSS, true) }
+func (v VulnIntelConfig) VulnIntelGHSAOn() bool { return boolOr(v.GHSA, true) }
+func (v VulnIntelConfig) VulnIntelPOCon() bool  { return boolOr(v.POC, false) }
+
+func boolOr(p *bool, def bool) bool {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
+// VulnIntelSyncInterval / VulnIntelMaxRuntime 解析时长，非法值退回默认。
+func (v VulnIntelConfig) VulnIntelSyncInterval() time.Duration {
+	if d, err := time.ParseDuration(strings.TrimSpace(v.SyncInterval)); err == nil && d >= time.Minute {
+		return d
+	}
+	return 24 * time.Hour
+}
+
+func (v VulnIntelConfig) VulnIntelMaxRuntime() time.Duration {
+	if d, err := time.ParseDuration(strings.TrimSpace(v.MaxRuntime)); err == nil && d > 0 {
+		return d
+	}
+	return 30 * time.Minute
 }
 
 // UpdateConfig 一键更新的更新源（可选）：一个仓库地址，更新跟随该仓库的默认分支。

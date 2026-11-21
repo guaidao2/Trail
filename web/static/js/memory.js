@@ -115,7 +115,7 @@
         }).join('');
     }
 
-    async function loadMemories() {
+    async function loadMemories(page) {
         const tbody = el('memory-body');
         if (tbody) tbody.innerHTML = '<tr><td colspan="7">' + esc(tt('common.loading', '加载中…')) + '</td></tr>';
         try {
@@ -126,9 +126,13 @@
             if (tier) params.set('tier', tier);
             const scope = el('memory-scope-filter') ? el('memory-scope-filter').value : '';
             if (scope) params.set('scope', scope);
-            params.set('page_size', '200');
+            params.set('page', String(page || 1));
+            currentPage = Number(page) || 1;
+            params.set('page_size', String(pageSize));
             const payload = await apiFetchJSON('/api/memory?' + params.toString());
             memoryCache = payload.items || [];
+            totalCount = payload.total || 0;
+            renderPagination('memory-pagination');
             renderSummary(payload);
             renderList(memoryCache);
         } catch (err) {
@@ -223,4 +227,47 @@
     window.initMemoryPage = function initMemoryPage() {
         loadMemories();
     };
+
+    // ---- 分页：与 skillsPage.* 文案保持一致 ----
+    let currentPage = 1;
+    let pageSize = 20;
+    let totalCount = 0;
+
+    function renderPagination(containerId) {
+        const box = el(containerId);
+        if (!box) return;
+        const pages = Math.max(1, Math.ceil(totalCount / pageSize));
+        if (currentPage > pages) currentPage = pages;
+        const start = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, totalCount);
+        const disFirst = currentPage <= 1 || totalCount === 0;
+        const disLast = currentPage >= pages || totalCount === 0;
+        const sizes = [10, 20, 50, 100].map(function (n) {
+            return '<option value="' + n + '"' + (n === pageSize ? ' selected' : '') + '>' + n + '</option>';
+        }).join('');
+        box.innerHTML = '<div class="pagination">'
+            + '<div class="pagination-info"><span>' + start + '-' + end + ' / ' + totalCount + '</span>'
+            + '<label class="pagination-page-size">' + esc(tt('skillsPage.perPageLabel', '每页显示'))
+            + ' <select onchange="memoryChangePageSize(this.value)">' + sizes + '</select></label></div>'
+            + '<div class="pagination-controls">'
+            + '<button class="btn-secondary" onclick="memoryGotoPage(1)"' + (disFirst ? ' disabled' : '') + '>' + esc(tt('skillsPage.firstPage', '首页')) + '</button>'
+            + '<button class="btn-secondary" onclick="memoryGotoPage(' + (currentPage - 1) + ')"' + (disFirst ? ' disabled' : '') + '>' + esc(tt('skillsPage.prevPage', '上一页')) + '</button>'
+            + '<span class="pagination-page">' + currentPage + ' / ' + pages + '</span>'
+            + '<button class="btn-secondary" onclick="memoryGotoPage(' + (currentPage + 1) + ')"' + (disLast ? ' disabled' : '') + '>' + esc(tt('skillsPage.nextPage', '下一页')) + '</button>'
+            + '<button class="btn-secondary" onclick="memoryGotoPage(' + pages + ')"' + (disLast ? ' disabled' : '') + '>' + esc(tt('skillsPage.lastPage', '末页')) + '</button>'
+            + '</div></div>';
+    }
+
+    function memoryGotoPage(p) {
+        loadMemories(Number(p) || 1);
+    }
+
+    function memoryChangePageSize(v) {
+        pageSize = Number(v) || 20;
+        currentPage = 1;
+        loadMemories(1);
+    }
+
+    window.memoryGotoPage = memoryGotoPage;
+    window.memoryChangePageSize = memoryChangePageSize;
 })();

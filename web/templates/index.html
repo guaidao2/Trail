@@ -298,6 +298,15 @@
                             <span data-i18n="nav.hosts">主机管理</span>
                         </div>
                     </div>
+                    <div class="nav-item" data-page="vuln-intel">
+                        <div class="nav-item-content" data-title="漏洞情报" onclick="switchPage('vuln-intel')" data-i18n="nav.vulnIntel" data-i18n-attr="data-title" data-i18n-skip-text="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 2a7 7 0 0 0-7 7v3l-2 4h18l-2-4V9a7 7 0 0 0-7-7z"></path>
+                                <path d="M9 21h6"></path>
+                            </svg>
+                            <span data-i18n="nav.vulnIntel">漏洞情报</span>
+                        </div>
+                    </div>
                     <div class="nav-item" data-page="ioc">
                         <div class="nav-item-content" data-title="IOC 情报" onclick="switchPage('ioc')" data-i18n="ioc.title" data-i18n-attr="data-title" data-i18n-skip-text="true">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2390,6 +2399,7 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div id="ioc-pagination" class="pagination-container"></div>
                         <div id="ioc-detail" class="ioc-detail" style="display:none;"></div>
                     </div>
                 </div>
@@ -2618,6 +2628,62 @@
                 </div>
 
                 <!-- 角色管理页面 -->
+                <div id="page-vuln-intel" class="page">
+                    <div class="page-header">
+                        <h2 data-i18n="vulnIntel.title">漏洞情报</h2>
+                        <div class="page-header-actions">
+                            <button class="btn-primary" id="vuln-intel-sync-btn" data-require-permission="intel:write" onclick="syncVulnIntel()" data-i18n="vulnIntel.sync">同步情报</button>
+                            <button class="btn-secondary" onclick="loadVulnIntel()" data-i18n="common.refresh">刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-content">
+                        <div id="vuln-intel-summary" class="ioc-status-summary" style="margin-bottom:12px;"></div>
+                        <div class="batch-queues-filters tasks-filters batch-queues-filters--compact">
+                            <label>
+                                <span data-i18n="vulnIntel.searchLabel">搜索</span>
+                                <input type="text" id="vuln-intel-search" data-i18n="vulnIntel.searchPlaceholder" data-i18n-attr="placeholder" placeholder="CVE / 标题 / 描述" oninput="loadVulnIntel()" />
+                            </label>
+                            <label>
+                                <span data-i18n="vulnIntel.colSeverity">严重度</span>
+                                <select id="vuln-intel-severity" onchange="loadVulnIntel()">
+                                    <option value="" data-i18n="vulnIntel.all">全部</option>
+                                    <option value="CRITICAL">CRITICAL</option>
+                                    <option value="HIGH">HIGH</option>
+                                    <option value="MEDIUM">MEDIUM</option>
+                                    <option value="LOW">LOW</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span data-i18n="vulnIntel.colProduct">组件</span>
+                                <input type="text" id="vuln-intel-product" placeholder="httpd / openssh" oninput="loadVulnIntel()" />
+                            </label>
+                            <label class="form-checkbox-inline">
+                                <input type="checkbox" id="vuln-intel-kev" onchange="loadVulnIntel()" />
+                                <span data-i18n="vulnIntel.kevOnly">只看在野利用</span>
+                            </label>
+                        </div>
+                        <div class="table-container ioc-table-card">
+                            <table class="data-table ioc-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="vulnIntel.colCve">CVE</th>
+                                        <th data-i18n="vulnIntel.colSeverity">严重度</th>
+                                        <th data-i18n="vulnIntel.colScore">CVSS</th>
+                                        <th>KEV</th>
+                                        <th>EPSS</th>
+                                        <th data-i18n="vulnIntel.colSource">来源</th>
+                                        <th data-i18n="vulnIntel.colPublished">发布时间</th>
+                                        <th data-i18n="vulnIntel.colActions">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vuln-intel-body">
+                                    <tr><td colspan="8" data-i18n="common.loading">加载中…</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="vuln-intel-pagination" class="pagination-container"></div>
+                    </div>
+                </div>
                 <div id="page-memory" class="page">
                     <div class="page-header">
                         <h2 data-i18n="memory.title">记忆</h2>
@@ -2670,6 +2736,7 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div id="memory-pagination" class="pagination-container"></div>
                     </div>
                 </div>
                 <div id="page-roles-management" class="page">
@@ -2887,6 +2954,9 @@
                                 </div>
                                 <div class="settings-nav-item" data-section="audit" onclick="switchSettingsSection('audit')">
                                     <span data-i18n="settings.nav.audit">日志审计</span>
+                                </div>
+                                <div class="settings-nav-item" data-section="vuln-intel" onclick="switchSettingsSection('vuln-intel')">
+                                    <span data-i18n="settings.nav.vulnIntel">漏洞情报</span>
                                 </div>
                                 <div class="settings-nav-item" data-section="storage" onclick="switchSettingsSection('storage')">
                                     <span data-i18n="settings.nav.storage">存储清理</span>
@@ -4371,6 +4441,72 @@
                                             <button class="btn-secondary" type="button" onclick="resetPasswordForm()" data-i18n="settingsSecurity.clear">清空</button>
                                             <button class="btn-primary change-password-submit" type="button" data-require-permission="auth:self" onclick="changePassword()" data-i18n="settingsSecurity.changePasswordBtn">修改密码</button>
                                         </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 漏洞情报 -->
+                            <div id="settings-section-vuln-intel" class="settings-section-content">
+                                <div class="settings-section-header">
+                                    <h3 data-i18n="settingsVulnIntel.title">漏洞情报</h3>
+                                </div>
+                                <p class="form-hint" data-i18n="settingsVulnIntel.subtitle">从公开源同步外部漏洞知识库（CISA KEV / NVD / EPSS / GHSA / GitHub PoC）。保存后立即生效，「安全作业 → 漏洞情报」页可手动触发同步。</p>
+
+                                <div class="settings-form">
+                                    <div class="form-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="vuln-intel-enabled" />
+                                            <span data-i18n="settingsVulnIntel.enabled">启用漏洞情报</span>
+                                        </label>
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.enabledHint">关闭后不会自动同步，已同步的数据仍可查询。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vuln-intel-proxy" data-i18n="settingsVulnIntel.proxy">出口代理</label>
+                                        <input type="text" id="vuln-intel-proxy" class="form-input" placeholder="http://127.0.0.1:7890" />
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.proxyHint">五个源共用；GHSA 与 PoC 走 api.github.com 的 HTTPS 接口，普通 HTTP 代理即可。留空则使用 HTTPS_PROXY / HTTP_PROXY 环境变量。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vuln-intel-nvd-key" data-i18n="settingsVulnIntel.nvdKey">NVD API Key</label>
+                                        <input type="password" id="vuln-intel-nvd-key" class="form-input" placeholder="可选" />
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.nvdKeyHint">匿名 5 次/30 秒，有 key 50 次/30 秒；首跑全量回填差别明显。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vuln-intel-github-token" data-i18n="settingsVulnIntel.githubToken">GitHub Token</label>
+                                        <input type="password" id="vuln-intel-github-token" class="form-input" placeholder="可选" />
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.githubTokenHint">GHSA 与 PoC 搜索用；匿名 60 次/小时，有 token 5000 次/小时。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vuln-intel-backfill-days" data-i18n="settingsVulnIntel.backfillDays">首跑回看天数</label>
+                                        <input type="number" id="vuln-intel-backfill-days" class="form-input" min="0" max="3650" placeholder="30" />
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.backfillDaysHint">0 表示从 1988 年起全量回填（约 40 万条，建议先配 NVD key）。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vuln-intel-sync-interval" data-i18n="settingsVulnIntel.syncInterval">自动同步间隔</label>
+                                        <input type="text" id="vuln-intel-sync-interval" class="form-input" placeholder="24h" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="vuln-intel-max-runtime" data-i18n="settingsVulnIntel.maxRuntime">单轮耗时上限</label>
+                                        <input type="text" id="vuln-intel-max-runtime" class="form-input" placeholder="30m" />
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.maxRuntimeHint">被上限截断的进度会在下一轮续传，不会从头再来。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label data-i18n="settingsVulnIntel.sources">同步源</label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="vuln-intel-epss" />
+                                            <span>EPSS</span>
+                                        </label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="vuln-intel-ghsa" />
+                                            <span>GHSA</span>
+                                        </label>
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="vuln-intel-poc" />
+                                            <span>GitHub PoC</span>
+                                        </label>
+                                        <small class="form-hint" data-i18n="settingsVulnIntel.sourcesHint">KEV 与 NVD 始终同步；PoC 默认关闭（消耗 GitHub 额度）。</small>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button class="btn-primary" onclick="saveVulnIntelSettings()" data-i18n="common.save">保存</button>
                                     </div>
                                 </div>
                             </div>
@@ -6164,8 +6300,9 @@
 
 
     <script src="/static/js/hosts.js?v=20261110-hosts"></script>
-    <script src="/static/js/ioc.js?v=20261116-ioc"></script>
-    <script src="/static/js/memory.js?v=20261120-memory"></script>
+    <script src="/static/js/ioc.js?v=20261121-page"></script>
+    <script src="/static/js/memory.js?v=20261121-page"></script>
+    <script src="/static/js/vuln-intel.js?v=20261121-page"></script>
     <!-- 移动端交互层：必须最后加载，它包装 window.switchPage 并注入移动端 DOM -->
 </body>
 </html>

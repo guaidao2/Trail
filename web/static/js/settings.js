@@ -760,6 +760,7 @@ async function loadConfig(loadTools = true, options = {}) {
         }
         
         currentConfig = await response.json();
+        applyVulnIntelSettings(currentConfig && currentConfig.vuln_intel);
         const alwaysVisibleConfigured = currentConfig?.multi_agent?.tool_search_always_visible_tools;
         const alwaysVisibleEffective = currentConfig?.multi_agent?.tool_search_always_visible_effective_tools;
         alwaysVisibleToolNames = new Set();
@@ -4901,3 +4902,79 @@ document.addEventListener('languagechange', function () {
 window.initSettingsCustomSelects = initSettingsCustomSelects;
 window.refreshSettingsCustomSelects = refreshSettingsCustomSelects;
 window.closeAllSettingsCustomSelects = closeAllSettingsCustomSelects;
+
+// ---- 漏洞情报设置 ----
+
+// applyVulnIntelSettings 把后端配置回填到表单（GET /api/config 的 vuln_intel 段）。
+function applyVulnIntelSettings(v) {
+    if (!v) return;
+    const set = (id, val) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        if (node.type === 'checkbox') node.checked = !!val;
+        else node.value = val == null ? '' : String(val);
+    };
+    set('vuln-intel-enabled', v.enabled);
+    set('vuln-intel-proxy', v.proxy);
+    set('vuln-intel-nvd-key', v.nvd_api_key);
+    set('vuln-intel-github-token', v.github_token);
+    set('vuln-intel-backfill-days', v.backfill_days);
+    set('vuln-intel-sync-interval', v.sync_interval);
+    set('vuln-intel-max-runtime', v.max_runtime);
+    // epss / ghsa 默认开，poc 默认关；未设置的字段按默认回填
+    set('vuln-intel-epss', v.epss !== false);
+    set('vuln-intel-ghsa', v.ghsa !== false);
+    set('vuln-intel-poc', v.poc === true);
+}
+
+// saveVulnIntelSettings 保存漏洞情报配置：只提交这一段，不覆盖其它设置。
+async function saveVulnIntelSettings() {
+    const val = (id) => {
+        const node = document.getElementById(id);
+        return node ? String(node.value || '').trim() : '';
+    };
+    const checked = (id) => {
+        const node = document.getElementById(id);
+        return !!(node && node.checked);
+    };
+    const backfillRaw = val('vuln-intel-backfill-days');
+    const payload = {
+        vuln_intel: {
+            enabled: checked('vuln-intel-enabled'),
+            proxy: val('vuln-intel-proxy'),
+            nvd_api_key: val('vuln-intel-nvd-key'),
+            github_token: val('vuln-intel-github-token'),
+            sync_interval: val('vuln-intel-sync-interval'),
+            max_runtime: val('vuln-intel-max-runtime'),
+            epss: checked('vuln-intel-epss'),
+            ghsa: checked('vuln-intel-ghsa'),
+            poc: checked('vuln-intel-poc'),
+        },
+    };
+    // 留空表示"不改"：后端按字段合并，省略即保留原值；若传 0 会变成"从 1988 年全量回填"。
+    if (backfillRaw !== '' && !isNaN(Number(backfillRaw))) {
+        payload.vuln_intel.backfill_days = Number(backfillRaw);
+    }
+    try {
+        const resp = await apiFetch('/api/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.error || '保存失败');
+        }
+        if (typeof showNotification === 'function') {
+            const msg = (typeof window.t === 'function' && window.t('settingsVulnIntel.saved') !== 'settingsVulnIntel.saved')
+                ? window.t('settingsVulnIntel.saved')
+                : '漏洞情报配置已保存';
+            showNotification(msg, 'success');
+        }
+    } catch (err) {
+        if (typeof showNotification === 'function') showNotification(err.message, 'error');
+    }
+}
+
+window.applyVulnIntelSettings = applyVulnIntelSettings;
+window.saveVulnIntelSettings = saveVulnIntelSettings;

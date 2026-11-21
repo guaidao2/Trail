@@ -13,7 +13,7 @@ const maskedSecret = "********"
 
 func secretConfigKey(key string) bool {
 	switch strings.ToLower(key) {
-	case "api_key", "apikey", "password", "secret", "client_secret", "app_secret", "token", "bot_token", "app_token", "verify_token", "encoding_aes_key", "authorization", "x-api-key":
+	case "api_key", "apikey", "password", "secret", "client_secret", "app_secret", "token", "bot_token", "app_token", "verify_token", "encoding_aes_key", "authorization", "x-api-key", "nvd_api_key", "github_token":
 		return true
 	}
 	return false
@@ -22,7 +22,8 @@ func secretConfigKey(key string) bool {
 func configSecretSnapshot(cfg *config.Config) GetConfigResponse {
 	return GetConfigResponse{AI: cfg.AI, OpenAI: cfg.OpenAI, Vision: cfg.Vision, FOFA: cfg.FOFA,
 		ZoomEye: cfg.ZoomEye, Quake: cfg.Quake, Shodan: cfg.Shodan, MCP: cfg.MCP,
-		Hitl: cfg.Hitl, Knowledge: cfg.Knowledge, Robots: cfg.Robots}
+		Hitl: cfg.Hitl, Knowledge: cfg.Knowledge, Robots: cfg.Robots,
+		VulnIntel: &cfg.VulnIntel}
 }
 
 func jsonSecretTree(value interface{}) (interface{}, error) {

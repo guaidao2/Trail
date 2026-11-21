@@ -11,7 +11,7 @@
 
 # 前端显示的版本号（可选，不填则显示默认版本）。一键更新完成后，会用新代码里这个文件的值
 # 同步更新你的 config.yaml 的 version 字段（页头版本号与静态资源缓存随代码走）。
-version: "v1.1.0"
+version: "v1.2.0"
 # 服务器配置
 server:
   host: 0.0.0.0 # 监听地址，0.0.0.0 表示监听所有网络接口
@@ -517,7 +517,7 @@ robots:
     ilink_user_id: ""
     base_url: https://ilinkai.weixin.qq.com
     bot_type: "3"
-    bot_agent: Trail/1.1.0
+    bot_agent: Trail/1.2.0
   wecom: # 企业微信
     enabled: false
     auth:
@@ -599,3 +599,29 @@ roles_dir: roles # 角色配置文件目录（相对于配置文件所在目录�
 # 把目录变成跟踪该仓库的 git 工作树，此后按正常安装一键更新。
 # update:
 #   repo: https://github.com/guaidao2/Trail.git  # 一个仓库地址；留空/不写 = 官方仓库
+
+# ============================================
+# 漏洞情报（可选）
+# ============================================
+# 从公开源同步外部漏洞知识库：CISA KEV（在野利用）、NVD 2.0（CVE 与版本区间）、
+# EPSS（利用概率）、GHSA（语言生态的版本区间）、GitHub PoC 聚合。
+# 与「漏洞管理」（自发现有）、「IOC」（攻击者实体）是三个不同的东西。
+# 不写这一段即不启用；启用后可在「安全作业 → 漏洞情报」页点「同步情报」。
+# vuln_intel:
+#   enabled: true
+#   # 所有请求（含 GitHub API）共用同一个出口代理；也认 HTTPS_PROXY / HTTP_PROXY 环境变量。
+#   # GHSA 与 PoC 走的是 api.github.com 的 HTTPS 接口，不是 git 协议，普通 HTTP 代理即可。
+#   proxy: http://127.0.0.1:7890
+#   # NVD 的 API key（可选）：匿名 5 次/30s，有 key 50 次/30s，首跑全量回填差别很大
+#   nvd_api_key: ""
+#   # GitHub token（可选）：GHSA 与 PoC 搜索用；匿名 60 次/小时，有 token 5000 次/小时
+#   github_token: ""
+#   # 首跑回看天数；0 表示从 1988 年起全量回填（约 40 万条，建议配 nvd_api_key）
+#   backfill_days: 30
+#   # 自动同步间隔与单轮耗时上限（被上限截断的进度会在下一轮续传）
+#   sync_interval: 24h
+#   max_runtime: 30m
+#   # 各源开关：EPSS 与 GHSA 默认开，PoC 默认关（需要 GitHub 额度）
+#   epss: true
+#   ghsa: true
+#   poc: false

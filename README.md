@@ -4,7 +4,7 @@
 
 # Trail (CyberstrikeAI Blue)
 
-> Chinese name **溯痕** · repository `guaidao2/Trail` · version **v1.1.0**
+> Chinese name **溯痕** · repository `guaidao2/Trail` · version **v1.2.0**
 
 [中文](README_CN.md) | [English](README.md)
 
@@ -14,7 +14,7 @@ Trail puts planning, execution, human oversight, evidence, and replay in one aud
 
 **Start here:** [Quick start](#quick-start-one-command-deployment) · [Documentation](docs/en-US/README.md) · [Security hardening](docs/en-US/security-hardening.md)
 
-## What's in v1.1.0
+## What's in v1.2.0
 
 This is the first release after forking [CyberStrikeAI](https://github.com/Ed1s0nZ/CyberStrikeAI) and refocusing it as a **blue-team / operations-only build**:
 

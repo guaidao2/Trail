@@ -425,6 +425,7 @@ const PAGE_PERMISSION_MAP = {
     hosts: 'host:read',
     ioc: 'ioc:read',
     memory: 'memory:read',
+    'vuln-intel': 'intel:read',
     mcp: 'mcp:read',
     'mcp-monitor': 'monitor:read',
     'mcp-management': 'mcp:read',

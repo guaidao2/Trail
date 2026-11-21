@@ -192,7 +192,7 @@
         tbody.innerHTML = rows.join('');
     }
 
-    async function loadIOC() {
+    async function loadIOC(page) {
         const tbody = el('ioc-body');
         if (tbody) tbody.innerHTML = '<tr><td colspan="9">' + esc(tt('ioc.loading', '加载中…')) + '</td></tr>';
         try {
@@ -203,9 +203,13 @@
             if (status) params.set('status', status);
             const type = el('ioc-type-filter') ? el('ioc-type-filter').value : '';
             if (type) params.set('type', type);
-            params.set('page_size', '100');
+            params.set('page', String(page || 1));
+            currentPage = Number(page) || 1;
+            params.set('page_size', String(pageSize));
             const payload = await apiFetchJSON('/api/ioc?' + params.toString());
             iocCache = payload.items || [];
+            totalCount = payload.total || 0;
+            renderPagination('ioc-pagination');
             renderSummary(payload);
             renderList(iocCache);
         } catch (err) {
@@ -313,4 +317,47 @@
     window.initIOCPage = function initIOCPage() {
         loadIOC();
     };
+
+    // ---- 分页：与 skillsPage.* 文案保持一致 ----
+    let currentPage = 1;
+    let pageSize = 20;
+    let totalCount = 0;
+
+    function renderPagination(containerId) {
+        const box = el(containerId);
+        if (!box) return;
+        const pages = Math.max(1, Math.ceil(totalCount / pageSize));
+        if (currentPage > pages) currentPage = pages;
+        const start = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, totalCount);
+        const disFirst = currentPage <= 1 || totalCount === 0;
+        const disLast = currentPage >= pages || totalCount === 0;
+        const sizes = [10, 20, 50, 100].map(function (n) {
+            return '<option value="' + n + '"' + (n === pageSize ? ' selected' : '') + '>' + n + '</option>';
+        }).join('');
+        box.innerHTML = '<div class="pagination">'
+            + '<div class="pagination-info"><span>' + start + '-' + end + ' / ' + totalCount + '</span>'
+            + '<label class="pagination-page-size">' + esc(tt('skillsPage.perPageLabel', '每页显示'))
+            + ' <select onchange="iocChangePageSize(this.value)">' + sizes + '</select></label></div>'
+            + '<div class="pagination-controls">'
+            + '<button class="btn-secondary" onclick="iocGotoPage(1)"' + (disFirst ? ' disabled' : '') + '>' + esc(tt('skillsPage.firstPage', '首页')) + '</button>'
+            + '<button class="btn-secondary" onclick="iocGotoPage(' + (currentPage - 1) + ')"' + (disFirst ? ' disabled' : '') + '>' + esc(tt('skillsPage.prevPage', '上一页')) + '</button>'
+            + '<span class="pagination-page">' + currentPage + ' / ' + pages + '</span>'
+            + '<button class="btn-secondary" onclick="iocGotoPage(' + (currentPage + 1) + ')"' + (disLast ? ' disabled' : '') + '>' + esc(tt('skillsPage.nextPage', '下一页')) + '</button>'
+            + '<button class="btn-secondary" onclick="iocGotoPage(' + pages + ')"' + (disLast ? ' disabled' : '') + '>' + esc(tt('skillsPage.lastPage', '末页')) + '</button>'
+            + '</div></div>';
+    }
+
+    function iocGotoPage(p) {
+        loadIOC(Number(p) || 1);
+    }
+
+    function iocChangePageSize(v) {
+        pageSize = Number(v) || 20;
+        currentPage = 1;
+        loadIOC(1);
+    }
+
+    window.iocGotoPage = iocGotoPage;
+    window.iocChangePageSize = iocChangePageSize;
 })();

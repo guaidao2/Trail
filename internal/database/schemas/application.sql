@@ -715,3 +715,73 @@ CREATE UNIQUE INDEX idx_agent_memory_uniq ON agent_memory(tier, scope, mem_key, 
 CREATE INDEX idx_agent_memory_tier ON agent_memory(tier);
 CREATE INDEX idx_agent_memory_host ON agent_memory(host_id);
 CREATE INDEX idx_agent_memory_updated ON agent_memory(updated_at);
+
+-- 漏洞情报：外部公开漏洞知识库（NVD + CISA KEV + EPSS + GHSA）。
+-- 与 vulnerabilities（自发现有）不同，这张表是"外界已知什么"；命中主机后才写成 detect_findings。
+CREATE TABLE vuln_intel (
+    cve_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    severity TEXT NOT NULL DEFAULT '',
+    cvss_score REAL,
+    cvss_vector TEXT NOT NULL DEFAULT '',
+    published_at DATETIME,
+    modified_at DATETIME,
+    kev INTEGER NOT NULL DEFAULT 0,
+    kev_added_at DATETIME,
+    epss REAL,
+    epss_percentile REAL,
+    epss_updated_at DATETIME,
+    source TEXT NOT NULL DEFAULT '',
+    refs TEXT NOT NULL DEFAULT '',
+    cwes TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX idx_vuln_intel_severity ON vuln_intel(severity);
+CREATE INDEX idx_vuln_intel_kev ON vuln_intel(kev);
+CREATE INDEX idx_vuln_intel_epss ON vuln_intel(epss);
+CREATE INDEX idx_vuln_intel_modified ON vuln_intel(modified_at);
+
+-- 结构化版本区间：NVD 的 cpeMatch 与 GHSA 的 vulnerableVersionRange 都落到这里，
+-- 供"版本是否受影响"做三态判定（true / false / 无法判断）。
+CREATE TABLE vuln_intel_range (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cve_id TEXT NOT NULL,
+    vendor TEXT NOT NULL DEFAULT '',
+    product TEXT NOT NULL DEFAULT '',
+    criteria TEXT NOT NULL DEFAULT '',
+    start_incl TEXT NOT NULL DEFAULT '',
+    start_excl TEXT NOT NULL DEFAULT '',
+    end_incl TEXT NOT NULL DEFAULT '',
+    end_excl TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    patched_version TEXT NOT NULL DEFAULT '',
+    UNIQUE(cve_id, criteria, start_incl, start_excl, end_incl, end_excl)
+);
+
+CREATE INDEX idx_vuln_intel_range_product ON vuln_intel_range(product);
+CREATE INDEX idx_vuln_intel_range_cve ON vuln_intel_range(cve_id);
+
+-- 公开 PoC / 利用链接（来自 GitHub 搜索聚合），蓝队用它判断"是否已有现成利用"。
+CREATE TABLE vuln_intel_poc (
+    cve_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    repo TEXT NOT NULL DEFAULT '',
+    stars INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME,
+    UNIQUE(cve_id, url)
+);
+
+CREATE INDEX idx_vuln_intel_poc_cve ON vuln_intel_poc(cve_id);
+
+-- 每源同步状态：游标、最近成功时间、累计条数、最后错误。
+CREATE TABLE vuln_intel_sync (
+    source TEXT PRIMARY KEY,
+    cursor TEXT NOT NULL DEFAULT '',
+    last_sync_at DATETIME,
+    total_synced INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1
+);

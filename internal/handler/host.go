@@ -30,6 +30,20 @@ type HostHandler struct {
 	box       *security.SecretBox
 	audit     *audit.Service
 	scheduler HostInspectionScheduler
+	// vulnIntelSync 由 app 层注入：同步需要 config（key/代理/开关），handler 不直接持有配置。
+	vulnIntelSync VulnIntelSyncFunc
+	// vulnIntelImport 由 app 层注入：离线导入本地情报文件。
+	vulnIntelImport VulnIntelImportFunc
+}
+
+// SetVulnIntelSync 注入漏洞情报同步函数。
+func (h *HostHandler) SetVulnIntelSync(fn VulnIntelSyncFunc) {
+	h.vulnIntelSync = fn
+}
+
+// SetVulnIntelImport 注入漏洞情报离线导入函数。
+func (h *HostHandler) SetVulnIntelImport(fn VulnIntelImportFunc) {
+	h.vulnIntelImport = fn
 }
 
 // errSecretBoxUnavailable 表示进程内没有可用的凭据加密实例（通常是密钥加载失败）。

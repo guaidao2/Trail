@@ -236,6 +236,7 @@ type GetConfigResponse struct {
 	Knowledge  config.KnowledgeConfig   `json:"knowledge"`
 	Robots     config.RobotsConfig      `json:"robots,omitempty"`
 	MultiAgent config.MultiAgentPublic  `json:"multi_agent,omitempty"`
+	VulnIntel  *config.VulnIntelConfig  `json:"vuln_intel,omitempty"`
 }
 
 // ToolConfigInfo 工具配置信息
@@ -250,6 +251,14 @@ type ToolConfigInfo struct {
 }
 
 // GetConfig 获取当前配置
+// VulnIntelSnapshot 返回漏洞情报配置的并发安全副本。
+// 后台同步协程与 MCP 工具读它，避免与 UpdateConfig 的写入构成数据竞争。
+func (h *ConfigHandler) VulnIntelSnapshot() config.VulnIntelConfig {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.config.VulnIntel
+}
+
 func (h *ConfigHandler) GetConfig(c *gin.Context) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -345,6 +354,7 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 		Knowledge:  h.config.Knowledge,
 		Robots:     h.config.Robots,
 		MultiAgent: multiPub,
+		VulnIntel:  &h.config.VulnIntel,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "配置序列化失败"})
@@ -694,6 +704,22 @@ type UpdateConfigRequest struct {
 	Robots     *config.RobotsConfig        `json:"robots,omitempty"`
 	MultiAgent *config.MultiAgentAPIUpdate `json:"multi_agent,omitempty"`
 	Storage    *config.StorageConfig       `json:"storage,omitempty"`
+	VulnIntel  *VulnIntelConfigUpdate      `json:"vuln_intel,omitempty"`
+}
+
+// VulnIntelConfigUpdate 只覆盖 JSON 中出现的字段（指针非 nil），
+// 避免"只改代理"这类部分提交把 token、间隔等未提交字段清空。
+type VulnIntelConfigUpdate struct {
+	Enabled      *bool   `json:"enabled,omitempty"`
+	Proxy        *string `json:"proxy,omitempty"`
+	NVDAPIKey    *string `json:"nvd_api_key,omitempty"`
+	GitHubToken  *string `json:"github_token,omitempty"`
+	BackfillDays *int    `json:"backfill_days,omitempty"`
+	SyncInterval *string `json:"sync_interval,omitempty"`
+	MaxRuntime   *string `json:"max_runtime,omitempty"`
+	EPSS         *bool   `json:"epss,omitempty"`
+	GHSA         *bool   `json:"ghsa,omitempty"`
+	POC          *bool   `json:"poc,omitempty"`
 }
 
 // AgentConfigUpdate 用于 PATCH /api/config 的 agent 段：仅 JSON 中出现的字段（指针非 nil）覆盖内存配置。
@@ -788,6 +814,48 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		h.logger.Info("更新 Vision 配置",
 			zap.Bool("enabled", h.config.Vision.Enabled),
 			zap.String("model", h.config.Vision.Model),
+		)
+	}
+
+	if req.VulnIntel != nil {
+		// 按字段合并：未提交的字段保持原值（避免"只改代理"把 token 清空）。
+		vi := &h.config.VulnIntel
+		if req.VulnIntel.Enabled != nil {
+			vi.Enabled = *req.VulnIntel.Enabled
+		}
+		if req.VulnIntel.Proxy != nil {
+			vi.Proxy = *req.VulnIntel.Proxy
+		}
+		if req.VulnIntel.NVDAPIKey != nil {
+			vi.NVDAPIKey = *req.VulnIntel.NVDAPIKey
+		}
+		if req.VulnIntel.GitHubToken != nil {
+			vi.GitHubToken = *req.VulnIntel.GitHubToken
+		}
+		if req.VulnIntel.BackfillDays != nil {
+			vi.BackfillDays = *req.VulnIntel.BackfillDays
+		}
+		if req.VulnIntel.SyncInterval != nil {
+			vi.SyncInterval = *req.VulnIntel.SyncInterval
+		}
+		if req.VulnIntel.MaxRuntime != nil {
+			vi.MaxRuntime = *req.VulnIntel.MaxRuntime
+		}
+		if req.VulnIntel.EPSS != nil {
+			vi.EPSS = req.VulnIntel.EPSS
+		}
+		if req.VulnIntel.GHSA != nil {
+			vi.GHSA = req.VulnIntel.GHSA
+		}
+		if req.VulnIntel.POC != nil {
+			vi.POC = req.VulnIntel.POC
+		}
+		// 代理地址可能带凭据，只记录开关，不记录地址本身。
+		h.logger.Info("更新漏洞情报配置",
+			zap.Bool("enabled", vi.Enabled),
+			zap.Bool("proxy_set", vi.Proxy != ""),
+			zap.Bool("nvd_key_set", vi.NVDAPIKey != ""),
+			zap.Bool("github_token_set", vi.GitHubToken != ""),
 		)
 	}
 
@@ -1885,6 +1953,7 @@ func (h *ConfigHandler) saveConfig() error {
 	updateRobotsConfig(root, h.config.Robots)
 	updateHitlConfig(root, h.config.Hitl)
 	updateStorageConfig(root, h.config.Storage)
+	updateVulnIntelConfig(root, h.config.VulnIntel)
 	updateMultiAgentConfig(root, h.config.MultiAgent)
 	// 更新外部MCP配置（使用external_mcp.go中的函数，同一包中可直接调用）
 	updateExternalMCPConfig(root, h.config.ExternalMCP)
@@ -2280,6 +2349,22 @@ func updateHitlConfig(doc *yaml.Node, cfg config.HitlConfig) {
 	setIntInMap(hitlNode, "retention_days", cfg.RetentionDaysEffective())
 	setStringInMap(hitlNode, "audit_agent_prompt", cfg.AuditAgentPrompt)
 	setStringInMap(hitlNode, "audit_agent_prompt_review_edit", cfg.AuditAgentPromptReviewEdit)
+}
+
+// updateVulnIntelConfig 把漏洞情报配置写回 config.yaml，保留文件其余内容与注释。
+func updateVulnIntelConfig(doc *yaml.Node, cfg config.VulnIntelConfig) {
+	root := doc.Content[0]
+	node := ensureMap(root, "vuln_intel")
+	setBoolInMap(node, "enabled", cfg.Enabled)
+	setStringInMap(node, "proxy", cfg.Proxy)
+	setStringInMap(node, "nvd_api_key", cfg.NVDAPIKey)
+	setStringInMap(node, "github_token", cfg.GitHubToken)
+	setIntInMap(node, "backfill_days", cfg.BackfillDays)
+	setStringInMap(node, "sync_interval", cfg.SyncInterval)
+	setStringInMap(node, "max_runtime", cfg.MaxRuntime)
+	setBoolInMap(node, "epss", cfg.VulnIntelEPSSOn())
+	setBoolInMap(node, "ghsa", cfg.VulnIntelGHSAOn())
+	setBoolInMap(node, "poc", cfg.VulnIntelPOCon())
 }
 
 // updateStorageConfig 把运行空间清理策略写回 config.yaml，保留文件其余内容与注释。

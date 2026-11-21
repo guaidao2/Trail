@@ -42,6 +42,13 @@ const (
 	ToolMemoryList   = "memory_list"
 	ToolMemoryForget = "memory_forget"
 
+	// 漏洞情报（外部公开知识库）
+	ToolVulnIntelSearch    = "vuln_intel_search"
+	ToolVulnIntelGet       = "vuln_intel_get"
+	ToolVulnIntelMatchHost = "vuln_intel_match_host"
+	ToolVulnIntelSync      = "vuln_intel_sync"
+	ToolVulnIntelImport    = "vuln_intel_import"
+
 	// 知识库工具
 	ToolListKnowledgeRiskTypes = "list_knowledge_risk_types"
 	ToolSearchKnowledgeBase    = "search_knowledge_base"
@@ -96,6 +103,10 @@ func IsBuiltinTool(toolName string) bool {
 		ToolMemorySearch,
 		ToolMemoryList,
 		ToolMemoryForget,
+		ToolVulnIntelSearch,
+		ToolVulnIntelGet,
+		ToolVulnIntelMatchHost,
+		ToolVulnIntelSync,
 		ToolCreateAsset,
 		ToolGetAsset,
 		ToolQueryAssets,
@@ -120,6 +131,7 @@ func IsBuiltinTool(toolName string) bool {
 		ToolBatchTaskScheduleEnabled,
 		ToolBatchTaskAdd,
 		ToolBatchTaskUpdate,
+		ToolVulnIntelImport,
 		ToolBatchTaskRemove:
 		return true
 	default:
@@ -153,6 +165,10 @@ func GetAllBuiltinTools() []string {
 		ToolMemorySearch,
 		ToolMemoryList,
 		ToolMemoryForget,
+		ToolVulnIntelSearch,
+		ToolVulnIntelGet,
+		ToolVulnIntelMatchHost,
+		ToolVulnIntelSync,
 		ToolCreateAsset,
 		ToolGetAsset,
 		ToolQueryAssets,
@@ -177,6 +193,7 @@ func GetAllBuiltinTools() []string {
 		ToolBatchTaskScheduleEnabled,
 		ToolBatchTaskAdd,
 		ToolBatchTaskUpdate,
+		ToolVulnIntelImport,
 		ToolBatchTaskRemove,
 	}
 }

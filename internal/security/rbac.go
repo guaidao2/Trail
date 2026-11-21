@@ -38,6 +38,8 @@ var PermissionCatalog = map[string]string{
 	"ioc:write":            "Create, update, and block/unblock IOC intelligence records",
 	"memory:read":          "Read agent memories (critical / long-term / short-term)",
 	"memory:write":         "Create, update, and delete agent memories",
+	"intel:read":           "Read vulnerability intelligence (NVD / KEV / EPSS / GHSA)",
+	"intel:write":          "Trigger vulnerability intelligence sync",
 	"mcp:read":             "View MCP status and external MCP configuration",
 	"mcp:execute":          "Invoke the authenticated MCP endpoint",
 	"mcp:external:execute": "Invoke tools exposed by configured external MCP servers",

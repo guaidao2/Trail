@@ -1,4 +1,28 @@
 
+## v1.2.0 — 2026-11-21
+
+### Added
+
+- 漏洞情报库：`vuln_intel` / `vuln_intel_range` / `vuln_intel_poc` / `vuln_intel_sync` 四张表，与「漏洞管理」（自发现有）、「IOC」（攻击者实体）区分；版本判定采用双读法（上游语义 / 发行版修订语义）。
+- 在线同步五个公开源：CISA KEV（全量覆盖）、NVD 2.0（按窗口增量、24 小时重叠）、EPSS（分页续传）、GHSA（整轮完成才推进游标）、GitHub PoC（仅 KEV 条目）；限速按 NVD key 自适应，单源失败隔离，支持代理与镜像地址覆盖。
+- 离线导入：`vuln_intel_import` 工具与 `POST /api/vuln-intel/import`，支持 KEV 目录、EPSS 响应、NVD 2.0 响应三种 JSON，格式留空自动识别。
+- 四个 Agent 工具：`vuln_intel_search` / `vuln_intel_get` / `vuln_intel_match_host` / `vuln_intel_sync`，新增权限点 `intel:read`、`intel:write`。
+- 主机兼容性匹配：采集软件包清单（dpkg/rpm/pip/npm/docker）后做四态判定——`affected`（无不确定因素）、`needs_manual`（包名模糊 / 带发行版修订 / CVE 年代久远 / 两种比较器结论不一致）、`unknown`、`not_affected`；只有 `affected` 写入该主机的检测发现。
+- 「安全作业 → 漏洞情报」页面（检索、严重度与组件过滤、行内版本区间与公开 PoC、同步按钮）；系统设置新增「漏洞情报」区块（代理、NVD key、GitHub token、同步间隔、源开关），并支持按间隔自动同步。
+- 漏洞情报 / IOC / 记忆三个列表页补分页（每页 10/20/50/100，首页 / 上页 / 下页 / 末页与总数）。
+
+### Changed
+
+- 包名到产品名的映射收紧：`linux-base` / `linux-libc-dev` 不再映射到内核，`python-debian` / `python3-*` 不再映射到 CPython；内核镜像类包仍映射到内核。
+- 发行版修订识别补全：`-7+deb13u4`、`4~deb11u1` 与纯数字尾段均触发 `needs_patch_check`，且修订号按 `-` 优先切分，避免 `-7` 与 `-8` 比出相等。
+- 主机包匹配改为批量等值查询（可命中 product 索引），800 个包由数百次全表扫描降到数次索引查询。
+
+### Fixed
+
+- KEV 记录写入目录自带的厂商、产品、名称、简述、修复动作、截止日期与勒索软件标记；NVD 已有更完整内容时保留 NVD 版本。
+- 未设置发布时间的漏洞被读成零值（`0001-01-01`）导致结果被误降级的问题；`published_at` 为空时不再让整批匹配失败。
+- 漏洞情报配置读写的并发竞争：后台同步、REST 与 MCP 工具统一读取加锁快照；三个同步入口串行化，避免游标被并发推进。
+
 ## v1.1.0 — 2026-11-20
 
 ### Added

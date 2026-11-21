@@ -305,7 +305,7 @@ func registerHostTools(server *mcp.Server, db *database.DB, box *security.Secret
 	server.RegisterTool(mcp.Tool{
 		Name:             builtin.ToolHostInspect,
 		ShortDescription: "主机基础巡检",
-		Description:      "在一台纳管主机上执行一组只读巡检命令（系统与内核、负载与磁盘、登录用户、监听端口、失败登录、计划任务、SUID 文件计数、最近登录），返回原始结果便于研判与留证。",
+		Description:      "在一台纳管主机上执行一组只读巡检命令（系统与内核、负载与磁盘、登录用户、监听端口、失败登录、计划任务、SUID 文件计数、最近登录、软件包清单），返回原始结果便于研判与留证。软件包清单可与 vuln_intel_match_host 配合判断组件级已知漏洞。",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -369,6 +369,7 @@ var inspectCommands = []struct {
 	{"cron", "计划任务", `echo "[cron]"; (crontab -l 2>/dev/null || echo "no user crontab"); ls -la /etc/cron.d 2>/dev/null | head -20`},
 	{"suid", "SUID 文件", `echo "[suid]"; find / -xdev -perm -4000 -type f 2>/dev/null | head -40`},
 	{"last", "最近登录", `echo "[last]"; last -n 10 2>/dev/null || echo "last unavailable"`},
+	{"packages", "软件包清单", `echo "[packages]"; (dpkg-query -W -f='${Package}\t${Version}\n' 2>/dev/null || rpm -qa --qf '%{NAME}\t%{VERSION}-%{RELEASE}\n' 2>/dev/null) | head -n 2000`},
 }
 
 func buildInspectScript(checks []string) string {
