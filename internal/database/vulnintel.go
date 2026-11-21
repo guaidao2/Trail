@@ -912,10 +912,9 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 			}
 			for _, ci := range matched {
 				cand := candidates[ci]
-				// vendor 可能是 CPE 厂商（pallets / ruby-lang），也可能是生态名（pypi）。
-				vNorm := NormalizeEcosystem(vendor)
-				// 语言生态包：只接受同生态的区间，或 CPE 区间（NVD 走厂商库也能覆盖到语言包）。
-				if cand.eco != "" && isEcosystemVendor(vendor) && vNorm != cand.eco {
+				// 语言包只认自己生态的区间：Python 的 babel 不是 npm 的 babel，
+				// NVD 的 CPE 行（vendor=babeljs）没有生态语义，也不能混用。
+				if cand.eco != "" && NormalizeEcosystem(vendor) != cand.eco {
 					continue
 				}
 				// 反过来：OS 包不该命中语言生态的区间（同名的 pip/npm 包不是系统包）。
@@ -1007,10 +1006,36 @@ func productCandidates(name string) []string {
 	if i := strings.LastIndex(name, "/"); i >= 0 && i+1 < len(name) {
 		set[name[i+1:]] = true
 	}
-	parts := strings.Split(name, "-")
-	for i := 1; i < len(parts); i++ {
-		if cand := strings.Join(parts[:i], "-"); cand != "" {
-			set[cand] = true
+	// 只按"已知包名后缀"截断，而不是每个 '-' 都截：
+	//   openssh-client → openssh（有意义）
+	//   libcap-ng0     → 不产出 libcap（否则会命中 libcap 的漏洞）
+	//   libxcb-icccm   → 不产出 libxcb
+	// 另外允许后缀后跟版本号：postgresql-client-15 → postgresql、mysql-client-8.0 → mysql。
+	knownSuffixes := []string{
+		"client", "server", "common", "core", "utils", "tools", "tool",
+		"libs", "dev", "devel", "bin", "doc", "docs", "dbg", "static",
+		"data", "daemon", "plugins", "plugin", "runtime", "base",
+		"tiny", "full", "light", "extras", "cli", "nox", "minimal", "examples",
+	}
+	for _, suf := range knownSuffixes {
+		marker := "-" + suf
+		idx := strings.LastIndex(name, marker)
+		if idx <= 2 {
+			continue
+		}
+		rest := strings.TrimPrefix(name[idx+len(marker):], "-")
+		// rest 为空表示以该后缀结尾；形如 15 / 10.11 / 8.0 表示后缀带版本号。
+		if rest == "" || startsWithDigit(rest) {
+			set[name[:idx]] = true
+		}
+	}
+	// 别名表：linux-image-6.12.113 这类包要靠它映射到内核产品名，
+	// 单靠后缀规则产不出 linux。
+	for prefix, products := range aliasProductByPackage {
+		if strings.HasPrefix(name, prefix) {
+			for _, p := range products {
+				set[strings.ToLower(p)] = true
+			}
 		}
 	}
 	if strings.HasPrefix(name, "lib") && len(name) > 5 {

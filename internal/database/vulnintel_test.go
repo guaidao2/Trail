@@ -548,3 +548,124 @@ func TestReplaceRangesScopedDelete(t *testing.T) {
 		}
 	}
 }
+
+// 语言包只认自己生态：Python 的 babel 不能命中 npm 的 Babel（无论那条区间记在
+// OSV(npm) 还是 NVD 的 CPE(vendor=babeljs) 里）。
+func TestMatchPackagesLanguageEcosystemIsolation(t *testing.T) {
+	db := newVulnIntelTestDB(t)
+	// NVD CPE 行：vendor 是厂商（babeljs），产品名同为 babel —— 属于 npm 的 Babel
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2023-45133", Severity: "CRITICAL", Source: "nvd", PublishedAt: "2023-10-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "babeljs", Product: "babel", StartIncl: "0", EndExcl: "7.23.2", Source: "nvd"},
+	}); err != nil {
+		t.Fatalf("Upsert nvd: %v", err)
+	}
+	// OSV 行：npm 生态的同名包
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2023-45133", Severity: "CRITICAL", Source: "osv", PublishedAt: "2023-10-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "npm", Product: "babel", StartIncl: "0", EndExcl: "7.23.2", Source: "osv"},
+	}); err != nil {
+		t.Fatalf("Upsert osv: %v", err)
+	}
+	matches, err := db.MatchPackages([]Package{{Name: "babel", Version: "2.17.0", Source: "pip"}})
+	if err != nil {
+		t.Fatalf("MatchPackages: %v", err)
+	}
+	for _, m := range matches {
+		if m.CVEID == "CVE-2023-45133" {
+			t.Fatalf("pip 的 babel 不应命中 npm 的 Babel: %+v", m)
+		}
+	}
+
+	// 同生态（pypi）的行必须仍能命中
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2024-0001", Severity: "HIGH", Source: "osv", PublishedAt: "2024-05-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "pypi", Product: "babel", StartIncl: "0", EndExcl: "2.18.0", Source: "osv"},
+	}); err != nil {
+		t.Fatalf("Upsert pypi: %v", err)
+	}
+	matches, err = db.MatchPackages([]Package{{Name: "babel", Version: "2.17.0", Source: "pip"}})
+	if err != nil {
+		t.Fatalf("MatchPackages: %v", err)
+	}
+	found := false
+	for _, m := range matches {
+		if m.CVEID == "CVE-2024-0001" && m.Status == "affected" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("pypi 生态的 babel 应判 affected，实际: %+v", matches)
+	}
+}
+
+// OS 包名不再按每个 '-' 截断：libcap-ng0 不该命中 libcap，libxcb-icccm 不该命中 libxcb。
+func TestMatchPackagesNoAggressivePrefix(t *testing.T) {
+	db := newVulnIntelTestDB(t)
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2023-2603", Severity: "HIGH", Source: "nvd", PublishedAt: "2023-05-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "libcap", Product: "libcap", StartIncl: "0", EndExcl: "2.67", Source: "nvd"},
+	}); err != nil {
+		t.Fatalf("Upsert libcap: %v", err)
+	}
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2013-2064", Severity: "MEDIUM", Source: "nvd", PublishedAt: "2013-06-01T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "xcb", Product: "libxcb", StartIncl: "0", EndExcl: "1.10", Source: "nvd"},
+	}); err != nil {
+		t.Fatalf("Upsert libxcb: %v", err)
+	}
+	matches, err := db.MatchPackages([]Package{
+		{Name: "libcap-ng0", Version: "0.8.5", Source: "dpkg"},
+		{Name: "libxcb-icccm", Version: "0.4.2", Source: "dpkg"},
+	})
+	if err != nil {
+		t.Fatalf("MatchPackages: %v", err)
+	}
+	for _, m := range matches {
+		if m.Status == "affected" {
+			t.Fatalf("不应把 %s 判成受 %s 影响（包名不是同一产品）: %+v", m.Package.Name, m.CVEID, m)
+		}
+	}
+
+	// 对照组：带已知后缀的包仍应正确命中（openssh-client → openssh）
+	if err := db.UpsertVulnIntel(VulnIntel{CVEID: "CVE-2023-38408", Severity: "CRITICAL", Source: "nvd", PublishedAt: "2023-07-19T00:00:00.000"}, []VulnIntelRange{
+		{Vendor: "openbsd", Product: "openssh", StartIncl: "5.5", EndExcl: "9.3p2", Source: "nvd"},
+	}); err != nil {
+		t.Fatalf("Upsert openssh: %v", err)
+	}
+	matches, err = db.MatchPackages([]Package{{Name: "openssh-client", Version: "9.0p1", Source: "dpkg"}})
+	if err != nil {
+		t.Fatalf("MatchPackages: %v", err)
+	}
+	if len(matches) == 0 || matches[0].Status != "affected" {
+		t.Fatalf("openssh-client 应命中 openssh 且判 affected，实际: %+v", matches)
+	}
+}
+
+// 包名截断要既覆盖真实 Debian 命名，又不把无关产品拉进来。
+func TestProductCandidatesSuffixRules(t *testing.T) {
+	contains := func(list []string, want string) bool {
+		for _, s := range list {
+			if s == want {
+				return true
+			}
+		}
+		return false
+	}
+	cases := []struct{ pkg, want string }{
+		{"openssh-client", "openssh"},
+		{"postgresql-client-15", "postgresql"},
+		{"mysql-client-8.0", "mysql"},
+		{"mariadb-server-10.11", "mariadb"},
+		{"vim-tiny", "vim"},
+		{"nginx-full", "nginx"},
+		{"linux-image-6.12.113", "linux"},
+	}
+	for _, tc := range cases {
+		if got := productCandidates(tc.pkg); !contains(got, tc.want) {
+			t.Fatalf("%s 应产出候选 %s，实际 %v", tc.pkg, tc.want, got)
+		}
+	}
+	// 这两个绝不能被截成无关产品
+	for _, pkg := range []string{"libcap-ng0", "libxcb-icccm"} {
+		got := productCandidates(pkg)
+		if contains(got, "libcap") || contains(got, "libxcb") {
+			t.Fatalf("%s 不应产出无关产品，实际 %v", pkg, got)
+		}
+	}
+}

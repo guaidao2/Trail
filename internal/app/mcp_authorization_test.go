@@ -1,3 +1,8 @@
+//go:build cgo
+
+// 这些用例需要真实 sqlite（go-sqlite3 依赖 cgo）。
+// 无 cgo 的环境下跳过，避免把 "sqlite is a stub" 误报成功能失败。
+
 package app
 
 import (

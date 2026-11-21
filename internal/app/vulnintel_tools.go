@@ -116,7 +116,7 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			"properties": map[string]interface{}{
 				"host_id":  map[string]interface{}{"type": "string", "description": "主机 ID"},
 				"persist":  map[string]interface{}{"type": "boolean", "description": "是否把 affected 项写成检测发现，默认 true"},
-				"limit":    map[string]interface{}{"type": "integer", "description": "返回条数上限，默认 50"},
+				"limit":    map[string]interface{}{"type": "integer", "description": "详情条数上限，默认 100，最大 1000；计数不受它影响"},
 				"include_unknown": map[string]interface{}{"type": "boolean", "description": "是否返回需要人工判断的 unknown 项，默认 true"},
 			},
 			"required": []string{"host_id"},
@@ -152,12 +152,18 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			return textResult("匹配漏洞情报失败: "+err.Error(), true), nil
 		}
 		includeUnknown := boolArgDefault(args, "include_unknown", true)
-		limit := intArg(args, "limit", 50)
-		if limit <= 0 || limit > 200 {
-			limit = 50
+		limit := intArg(args, "limit", 100)
+		if limit <= 0 {
+			limit = 100
+		}
+		if limit > 1000 {
+			limit = 1000
 		}
 		affected, manual, unknown := 0, 0, 0
 		shown := []database.PackageMatch{}
+		// matchedTotal 统计"过滤后应该展示的总条数"，与 limit 无关：
+		// 调用方要能区分"只有这么多"和"被详情上限截断了"。
+		matchedTotal := 0
 		for _, m := range matches {
 			switch m.Status {
 			case "affected":
@@ -173,6 +179,7 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			if m.Status == "unknown" && !includeUnknown {
 				continue
 			}
+			matchedTotal++
 			if len(shown) < limit {
 				shown = append(shown, m)
 			}
@@ -219,8 +226,12 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			"unknown":           unknown,
 			"needs_patch_check": patchCheckCount,
 			"persisted":         persisted,
-			"matched":           shown,
-			"note":              "affected 表示版本落在区间且无不确定因素；needs_manual 需要人工核（包名模糊 / 留版修订 / 年代久远 / 两种比较器结论不一致）；needs_patch_check 的条目要核对发行版补丁（backport）后再定性",
+			// 计数是全量的；matched 只是详情，可能被 limit 截断。
+			"matched_total": matchedTotal,
+			"shown":         len(shown),
+			"truncated":     matchedTotal > len(shown),
+			"matched":       shown,
+			"note":          "计数（affected/needs_manual/unknown/needs_patch_check）对全量计算，不受 limit 影响；matched 是详情列表，truncated=true 表示还有条目未返回，可提高 limit 或按 status 分次查看。affected 表示版本落在区间且无不确定因素；needs_manual 需人工核（包名模糊 / 留版修订 / 年代久远 / 两种比较器结论不一致）；needs_patch_check 的条目要核对发行版补丁（backport）后再定性。matched_product 是命中的产品名，可用来核对映射是否正确",
 		}, "", "  ")
 		return textResult(string(b), false), nil
 	})
