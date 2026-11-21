@@ -1,8 +1,10 @@
 package app
 
 import (
+	"fmt"
 	"testing"
 
+	"trail/internal/database"
 	"trail/internal/mcp/builtin"
 )
 
@@ -93,5 +95,57 @@ func TestVulnIntelToolsRegistered(t *testing.T) {
 		if !found {
 			t.Fatalf("%s 不在 GetAllBuiltinTools 里", name)
 		}
+	}
+}
+
+// 分页切片的边界：正常页、末页、越界、非法 offset、limit 兜底。
+func TestPaginateItems(t *testing.T) {
+	items := make([]database.PackageMatch, 45)
+	for i := range items {
+		items[i].CVEID = fmt.Sprintf("CVE-2024-%04d", i)
+	}
+
+	cases := []struct {
+		name       string
+		offset     int
+		limit      int
+		wantLen    int
+		wantNext   int
+		wantFirst  string
+	}{
+		{"first page", 0, 20, 20, 20, "CVE-2024-0000"},
+		{"middle page", 20, 20, 20, 40, "CVE-2024-0020"},
+		{"last partial page", 40, 20, 5, 0, "CVE-2024-0040"},
+		{"offset at total", 45, 20, 0, 0, ""},
+		{"offset beyond total", 999, 20, 0, 0, ""},
+		{"negative offset", -5, 20, 20, 20, "CVE-2024-0000"},
+		{"zero limit falls back", 0, 0, 20, 20, "CVE-2024-0000"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, next := paginateItems(items, tc.offset, tc.limit)
+			if len(got) != tc.wantLen {
+				t.Fatalf("条数应为 %d，实际 %d", tc.wantLen, len(got))
+			}
+			if next != tc.wantNext {
+				t.Fatalf("next_offset 应为 %d，实际 %d", tc.wantNext, next)
+			}
+			if tc.wantFirst != "" && got[0].CVEID != tc.wantFirst {
+				t.Fatalf("首条应为 %s，实际 %s", tc.wantFirst, got[0].CVEID)
+			}
+			if got == nil {
+				t.Fatal("空页也应是空切片而非 nil（JSON 会变成 null）")
+			}
+		})
+	}
+}
+
+// 返回的页必须是副本：调用方改页内元素不应影响原集合（否则多次翻页会互相污染）。
+func TestPaginateItemsReturnsCopy(t *testing.T) {
+	items := []database.PackageMatch{{CVEID: "CVE-2024-0001"}}
+	page, _ := paginateItems(items, 0, 20)
+	page[0].CVEID = "MUTATED"
+	if items[0].CVEID != "CVE-2024-0001" {
+		t.Fatalf("paginateItems 应返回副本，原集合被改写成 %s", items[0].CVEID)
 	}
 }

@@ -116,7 +116,8 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			"properties": map[string]interface{}{
 				"host_id":  map[string]interface{}{"type": "string", "description": "主机 ID"},
 				"persist":  map[string]interface{}{"type": "boolean", "description": "是否把 affected 项写成检测发现，默认 true"},
-				"limit":    map[string]interface{}{"type": "integer", "description": "详情条数上限，默认 100，最大 1000；计数不受它影响"},
+				"limit":    map[string]interface{}{"type": "integer", "description": "详情条数，默认 20，最大 200；计数始终是全量，不受它影响（工具结果有 12KB 上限，详情过多会被整体裁剪）"},
+				"offset":   map[string]interface{}{"type": "integer", "description": "详情起始偏移，默认 0；配合 next_offset 翻页"},
 				"include_unknown": map[string]interface{}{"type": "boolean", "description": "是否返回需要人工判断的 unknown 项，默认 true"},
 			},
 			"required": []string{"host_id"},
@@ -152,18 +153,23 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			return textResult("匹配漏洞情报失败: "+err.Error(), true), nil
 		}
 		includeUnknown := boolArgDefault(args, "include_unknown", true)
-		limit := intArg(args, "limit", 100)
+		// 详情默认只返 20 条：MCP 层对工具结果有 12KB 上限（tool_result_guard.go），
+		// 把上百条详情内联进 JSON 会被整体裁掉，反而看不到真实数据。
+		limit := intArg(args, "limit", 20)
 		if limit <= 0 {
-			limit = 100
+			limit = 20
 		}
-		if limit > 1000 {
-			limit = 1000
+		if limit > 200 {
+			limit = 200
+		}
+		offset := intArg(args, "offset", 0)
+		if offset < 0 {
+			offset = 0
 		}
 		affected, manual, unknown := 0, 0, 0
-		shown := []database.PackageMatch{}
-		// matchedTotal 统计"过滤后应该展示的总条数"，与 limit 无关：
-		// 调用方要能区分"只有这么多"和"被详情上限截断了"。
-		matchedTotal := 0
+		// displayable 保存所有可展示项（与分页无关），先收集再切片，
+		// 这样 matched_total 精确、offset 才能翻页。
+		displayable := []database.PackageMatch{}
 		for _, m := range matches {
 			switch m.Status {
 			case "affected":
@@ -179,16 +185,24 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			if m.Status == "unknown" && !includeUnknown {
 				continue
 			}
-			matchedTotal++
-			if len(shown) < limit {
-				shown = append(shown, m)
-			}
+			displayable = append(displayable, m)
 		}
+		matchedTotal := len(displayable)
+		shown, nextOffset := paginateItems(displayable, offset, limit)
 
 		persisted := 0
-		if boolArgDefault(args, "persist", true) {
-			if _, ok := hostToolAccess(ctx, "host:write"); ok {
-				for _, m := range shown {
+		// 只在第一页做持久化：UpsertFinding 不是幂等的（hit_count +1、已解决的会被重新打开），
+		// 每页都写会让翻页把计数翻倍，并撤销运维刚做的"已解决"。
+		persistRequested := boolArgDefault(args, "persist", true)
+		// 必须把 host:write 一并算进"是否真的写了"：只读用户能过 intel:read / host:read
+		// 两道门进来，但写不进去，否则 persist_applied=true 会是比 persisted:0 更误导的信号。
+		_, canWriteFindings := hostToolAccess(ctx, "host:write")
+		persistApplied := persistRequested && offset == 0 && canWriteFindings
+		if persistApplied {
+			if canWriteFindings {
+				// persistApplied 已包含 host:write 校验，这里不再重复查权限。
+				// 持久化覆盖全部 affected，不受分页影响：否则翻页会漏写发现。
+				for _, m := range matches {
 					if m.Status != "affected" {
 						continue
 					}
@@ -226,12 +240,18 @@ func registerVulnIntelTools(server *mcp.Server, db *database.DB, box *security.S
 			"unknown":           unknown,
 			"needs_patch_check": patchCheckCount,
 			"persisted":         persisted,
-			// 计数是全量的；matched 只是详情，可能被 limit 截断。
+			// persist_applied=false 且 persist 请求为 true 时，说明写入被跳过
+			// （非首页 / 无 host:write 权限），不能把 persisted=0 误读成
+			// "这台主机没有受影响项"。
+			"persist_applied": persistApplied,
+			// 计数是全量的；matched 只是当前页详情。
 			"matched_total": matchedTotal,
+			"offset":        offset,
 			"shown":         len(shown),
-			"truncated":     matchedTotal > len(shown),
+			"next_offset":   nextOffset,
+			"truncated":     offset+len(shown) < matchedTotal,
 			"matched":       shown,
-			"note":          "计数（affected/needs_manual/unknown/needs_patch_check）对全量计算，不受 limit 影响；matched 是详情列表，truncated=true 表示还有条目未返回，可提高 limit 或按 status 分次查看。affected 表示版本落在区间且无不确定因素；needs_manual 需人工核（包名模糊 / 留版修订 / 年代久远 / 两种比较器结论不一致）；needs_patch_check 的条目要核对发行版补丁（backport）后再定性。matched_product 是命中的产品名，可用来核对映射是否正确",
+			"note":          "计数（affected/needs_manual/unknown/needs_patch_check）对全量计算，不受分页影响；matched 是当前页详情（offset/limit），next_offset>0 表示还有下一页（等价于 truncated=true），传该值作为 offset 继续取。offset 是相对“过滤后集合”的偏移，翻页途中不要改 include_unknown，否则窗口会错位。工具结果有 12KB 上限，故默认每页 20 条；persist 仅在第一页执行。affected 表示版本落在区间且无不确定因素；needs_manual 需人工核（包名模糊 / 留版修订 / 年代久远 / 两种比较器结论不一致）；needs_patch_check 的条目要核对发行版补丁（backport）后再定性。matched_product 是命中的产品名，可用来核对映射是否正确",
 		}, "", "  ")
 		return textResult(string(b), false), nil
 	})
@@ -434,6 +454,34 @@ func parsePackageInventory(output string) []database.Package {
 		pkgs = append(pkgs, database.Package{Name: name, Version: version, Source: source})
 	}
 	return pkgs
+}
+
+// paginateItems 按 offset/limit 切片，返回当前页与下一页偏移（0 表示没有下一页）。
+//
+// 单独抽出来是为了能对边界做表驱动测试：offset 越界、负值、limit 兜底、
+// 末页部分填充，这些都不需要连主机或数据库。
+func paginateItems(items []database.PackageMatch, offset, limit int) ([]database.PackageMatch, int) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	total := len(items)
+	if offset >= total {
+		return []database.PackageMatch{}, 0
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	next := 0
+	if end < total {
+		next = end
+	}
+	page := make([]database.PackageMatch, end-offset)
+	copy(page, items[offset:end])
+	return page, next
 }
 
 func formatEPSS(v *float64) string {

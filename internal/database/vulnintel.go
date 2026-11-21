@@ -987,7 +987,18 @@ func (db *DB) MatchPackages(pkgs []Package) ([]PackageMatch, error) {
 		if out[j].EPSS != nil {
 			ej = *out[j].EPSS
 		}
-		return ei > ej
+		if ei != ej {
+			return ei > ej
+		}
+		// 确定性 tiebreaker：否则同分条目的相对顺序取决于 SQL 返回顺序，
+		// 分页（offset/limit）时会出现漏条或重复。
+		if out[i].CVEID != out[j].CVEID {
+			return out[i].CVEID < out[j].CVEID
+		}
+		if out[i].Package.Name != out[j].Package.Name {
+			return out[i].Package.Name < out[j].Package.Name
+		}
+		return out[i].Package.Version < out[j].Package.Version
 	})
 	return out, nil
 }
