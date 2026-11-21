@@ -410,7 +410,8 @@ async function bootstrapApp() {
 }
 
 const PAGE_PERMISSION_MAP = {
-    dashboard: 'dashboard:read',
+    // 仪表盘展示的是主机态势（数据来自 /api/wall/graph），因此跟随 host:read
+    dashboard: 'host:read',
     chat: 'chat:read',
     hitl: 'hitl:read',
     'tool-guard': 'config:read',

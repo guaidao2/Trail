@@ -39948,3 +39948,605 @@ html[data-theme="dark"] .ioc-detail > h3 small {
         overflow-x: auto;
     }
 }
+
+/* ==========================================================================
+   仪表盘 · 蓝队态势入口（#page-dashboard）
+   --------------------------------------------------------------------------
+   与 /wall 攻防态势大屏同一套视觉语言：深色底、切角发光面板、细扫描线；
+   但这里是工作入口页而不是投屏，所以克制——不做动画扫光，不动用 3D，
+   扫描线压低到几乎只在深色底上有一层纹理。
+   全部规则都收敛在 #page-dashboard 内，且类名一律 dashboard-* 新命名，
+   不复用旧卡片（.dashboard-kpi-card 等）已废弃的类，避免被历史规则串味。
+   ========================================================================== */
+
+#page-dashboard {
+    /* 严重度语义色：与 wall.css / 3D 场景保持同一组值 */
+    --dash-critical: #ff3b5c;
+    --dash-high: #ff8a3d;
+    --dash-medium: #ffd24a;
+    --dash-low: #4aa8ff;
+    --dash-info: #8a94a6;
+    /* 全息主色与文本 */
+    --dash-cyan: #4fd6ff;
+    --dash-text: #d7e6f5;
+    --dash-text-dim: #7f93a8;
+    --dash-text-bright: #eaf7ff;
+    /* 只用系统等宽字体，不额外请求任何字体文件 */
+    --dash-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, "Courier New", monospace;
+}
+
+/* ---- 内容容器：深色底 + 细扫描线 ---------------------------------------- */
+
+#page-dashboard .dashboard-situation-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid rgba(79, 214, 255, 0.14);
+    border-radius: 10px;
+    color: var(--dash-text);
+    background:
+        repeating-linear-gradient(180deg, rgba(150, 220, 255, 0.026) 0, rgba(150, 220, 255, 0.026) 1px, transparent 1px, transparent 3px),
+        radial-gradient(ellipse 92% 68% at 50% 0%, rgba(14, 54, 84, 0.5), rgba(3, 8, 16, 0) 66%),
+        linear-gradient(180deg, #071726 0%, #03060d 56%, #01030a 100%);
+    box-shadow: inset 0 0 42px rgba(44, 148, 214, 0.08), 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+#page-dashboard .dashboard-situation-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border: 1px solid rgba(255, 59, 92, 0.34);
+    border-left: 3px solid var(--dash-critical);
+    border-radius: 3px;
+    background: rgba(255, 59, 92, 0.09);
+    color: #ffb3bf;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+#page-dashboard .dashboard-situation-error[hidden] {
+    display: none;
+}
+
+/* ---- 首屏 KPI：四张切角发光卡 ------------------------------------------ */
+
+#page-dashboard .dashboard-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+#page-dashboard .dashboard-metric {
+    position: relative;
+    min-width: 0;
+    padding: 12px 14px 13px;
+    border: 1px solid rgba(79, 214, 255, 0.14);
+    border-radius: 4px;
+    background: linear-gradient(158deg, rgba(8, 24, 42, 0.9), rgba(2, 8, 18, 0.76));
+    box-shadow: inset 0 0 24px rgba(44, 148, 214, 0.09);
+    cursor: pointer;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+/* 左上 / 右下 切角高亮：科技面板的“焊点” */
+#page-dashboard .dashboard-metric::before,
+#page-dashboard .dashboard-metric::after,
+#page-dashboard .dashboard-panel::before,
+#page-dashboard .dashboard-panel::after {
+    content: "";
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+}
+
+#page-dashboard .dashboard-metric::before,
+#page-dashboard .dashboard-panel::before {
+    top: -1px;
+    left: -1px;
+    border-top: 2px solid rgba(79, 214, 255, 0.45);
+    border-left: 2px solid rgba(79, 214, 255, 0.45);
+}
+
+#page-dashboard .dashboard-metric::after,
+#page-dashboard .dashboard-panel::after {
+    right: -1px;
+    bottom: -1px;
+    border-right: 2px solid rgba(79, 214, 255, 0.45);
+    border-bottom: 2px solid rgba(79, 214, 255, 0.45);
+}
+
+#page-dashboard .dashboard-metric:hover {
+    border-color: rgba(79, 214, 255, 0.34);
+    box-shadow: inset 0 0 28px rgba(44, 148, 214, 0.16);
+    transform: translateY(-1px);
+}
+
+#page-dashboard .dashboard-metric:focus-visible {
+    outline: 2px solid var(--dash-cyan);
+    outline-offset: 2px;
+}
+
+#page-dashboard .dashboard-metric-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+#page-dashboard .dashboard-metric-label {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--dash-text-dim);
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-metric-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    color: rgba(79, 214, 255, 0.6);
+}
+
+/* 大数字：等宽 + tabular-nums，远看能读到态势 */
+#page-dashboard .dashboard-metric-value {
+    margin-top: 6px;
+    color: var(--dash-text-bright);
+    font-family: var(--dash-mono);
+    font-size: clamp(26px, 2.6vw, 40px);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    text-shadow: 0 0 16px rgba(120, 200, 255, 0.3);
+}
+
+/* 在野利用命中 > 0 时才让这张卡变红；为 0 保持中性，不做视觉噪音 */
+#page-dashboard .dashboard-metric.is-alert {
+    border-color: rgba(255, 59, 92, 0.4);
+    box-shadow: inset 0 0 28px rgba(255, 59, 92, 0.14);
+}
+
+#page-dashboard .dashboard-metric.is-alert .dashboard-metric-value {
+    color: var(--dash-critical);
+    text-shadow: 0 0 18px rgba(255, 59, 92, 0.6);
+}
+
+#page-dashboard .dashboard-metric.is-alert .dashboard-metric-icon {
+    color: rgba(255, 59, 92, 0.75);
+}
+
+#page-dashboard .dashboard-metric-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    min-height: 17px;
+    margin-top: 8px;
+    color: var(--dash-text-dim);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+#page-dashboard .dashboard-metric-sub--ioc {
+    gap: 2px 10px;
+}
+
+#page-dashboard .dashboard-metric-sub-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-metric-sub-num {
+    color: var(--dash-text);
+    font-family: var(--dash-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- 下方两列：Top 风险主机 / 实时事件 --------------------------------- */
+
+#page-dashboard .dashboard-board-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 12px;
+}
+
+#page-dashboard .dashboard-panel {
+    position: relative;
+    min-width: 0;
+    padding: 13px 15px 14px;
+    border: 1px solid rgba(79, 214, 255, 0.14);
+    border-radius: 4px;
+    background: linear-gradient(158deg, rgba(8, 24, 42, 0.86), rgba(2, 8, 18, 0.72));
+    box-shadow: inset 0 0 26px rgba(44, 148, 214, 0.08);
+}
+
+#page-dashboard .dashboard-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+#page-dashboard .dashboard-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: #bfe6ff;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-panel-title::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 3px;
+    height: 12px;
+    background: linear-gradient(180deg, var(--dash-cyan), rgba(79, 214, 255, 0));
+    box-shadow: 0 0 8px rgba(79, 214, 255, 0.8);
+}
+
+#page-dashboard .dashboard-panel-hint {
+    flex: 0 0 auto;
+    color: var(--dash-text-dim);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+/* ---- 主机风险 Top 5 ---------------------------------------------------- */
+
+#page-dashboard .dashboard-risk-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+#page-dashboard .dashboard-risk-row {
+    --risk-fill: linear-gradient(90deg, rgba(74, 168, 255, 0.75), rgba(79, 214, 255, 0.95));
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    grid-template-areas:
+        "rank name score"
+        "rank meta meta"
+        "rank meter meter";
+    gap: 3px 10px;
+    padding: 8px 8px 9px;
+    border-left: 2px solid var(--dash-info);
+    background: linear-gradient(90deg, rgba(79, 214, 255, 0.055), transparent 72%);
+}
+
+#page-dashboard .dashboard-risk-row[data-severity="critical"] {
+    --risk-fill: linear-gradient(90deg, rgba(255, 59, 92, 0.55), rgba(255, 59, 92, 0.95));
+    border-left-color: var(--dash-critical);
+}
+
+#page-dashboard .dashboard-risk-row[data-severity="high"] {
+    --risk-fill: linear-gradient(90deg, rgba(255, 138, 61, 0.55), rgba(255, 138, 61, 0.95));
+    border-left-color: var(--dash-high);
+}
+
+#page-dashboard .dashboard-risk-row[data-severity="medium"] {
+    --risk-fill: linear-gradient(90deg, rgba(255, 210, 74, 0.5), rgba(255, 210, 74, 0.95));
+    border-left-color: var(--dash-medium);
+}
+
+#page-dashboard .dashboard-risk-row[data-severity="low"] {
+    border-left-color: var(--dash-low);
+}
+
+#page-dashboard .dashboard-risk-rank {
+    grid-area: rank;
+    color: var(--dash-text-dim);
+    font-family: var(--dash-mono);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: right;
+}
+
+#page-dashboard .dashboard-risk-name {
+    grid-area: name;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--dash-text-bright);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-risk-score {
+    grid-area: score;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+    font-family: var(--dash-mono);
+}
+
+#page-dashboard .dashboard-risk-score-num {
+    color: var(--dash-text-bright);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+#page-dashboard .dashboard-risk-score-unit {
+    color: var(--dash-text-dim);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+}
+
+#page-dashboard .dashboard-risk-meta {
+    grid-area: meta;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 6px;
+    min-width: 0;
+    color: var(--dash-text-dim);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+#page-dashboard .dashboard-risk-ip {
+    overflow: hidden;
+    color: #8fb4cf;
+    font-family: var(--dash-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-risk-sep {
+    opacity: 0.45;
+}
+
+#page-dashboard .dashboard-risk-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-risk-chip-num {
+    color: var(--dash-text);
+    font-family: var(--dash-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+#page-dashboard .dashboard-risk-meter {
+    grid-area: meter;
+    display: block;
+    height: 3px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: rgba(79, 214, 255, 0.13);
+}
+
+#page-dashboard .dashboard-risk-meter-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--risk-fill);
+    transition: width 0.3s ease;
+}
+
+/* ---- 实时事件 ---------------------------------------------------------- */
+
+#page-dashboard .dashboard-live-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+#page-dashboard .dashboard-live-row {
+    --sev-color: var(--dash-info);
+    display: grid;
+    grid-template-columns: auto minmax(64px, auto) minmax(0, 1fr);
+    grid-template-areas: "time host title";
+    align-items: center;
+    gap: 0 10px;
+    padding: 6px 8px;
+    border-left: 2px solid var(--sev-color);
+    background: linear-gradient(90deg, rgba(79, 214, 255, 0.045), transparent 76%);
+}
+
+#page-dashboard .dashboard-live-row[data-severity="critical"] { --sev-color: var(--dash-critical); }
+#page-dashboard .dashboard-live-row[data-severity="high"] { --sev-color: var(--dash-high); }
+#page-dashboard .dashboard-live-row[data-severity="medium"] { --sev-color: var(--dash-medium); }
+#page-dashboard .dashboard-live-row[data-severity="low"] { --sev-color: var(--dash-low); }
+#page-dashboard .dashboard-live-row[data-severity="info"] { --sev-color: var(--dash-info); }
+
+#page-dashboard .dashboard-live-time {
+    grid-area: time;
+    color: var(--dash-text-dim);
+    font-family: var(--dash-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-live-host {
+    grid-area: host;
+    overflow: hidden;
+    color: #9dc0d8;
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-live-title {
+    grid-area: title;
+    overflow: hidden;
+    color: var(--sev-color);
+    font-size: 12.5px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#page-dashboard .dashboard-live-row[data-severity="info"] .dashboard-live-title {
+    color: var(--dash-text);
+}
+
+/* ---- 空态 -------------------------------------------------------------- */
+
+#page-dashboard .dashboard-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 26px 12px;
+    color: var(--dash-text-dim);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-align: center;
+}
+
+/* display:flex 会盖过 UA 的 [hidden]，需显式提权 */
+#page-dashboard .dashboard-empty[hidden],
+#page-dashboard .dashboard-risk-list[hidden],
+#page-dashboard .dashboard-live-list[hidden] {
+    display: none;
+}
+
+/* ---- 入口卡：打开攻防态势大屏 /wall ------------------------------------ */
+
+#page-dashboard .dashboard-wall-cta {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    overflow: hidden;
+    padding: 16px 18px;
+    border: 1px solid rgba(79, 214, 255, 0.34);
+    border-radius: 4px;
+    background: linear-gradient(120deg, rgba(10, 38, 64, 0.92), rgba(3, 12, 24, 0.82));
+    box-shadow: inset 0 0 34px rgba(79, 214, 255, 0.14), 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+#page-dashboard .dashboard-wall-cta-glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse 60% 120% at 12% 50%, rgba(79, 214, 255, 0.18), transparent 62%);
+}
+
+#page-dashboard .dashboard-wall-cta-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+}
+
+#page-dashboard .dashboard-wall-cta-title {
+    margin: 0;
+    color: var(--dash-text-bright);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+    text-shadow: 0 0 18px rgba(79, 214, 255, 0.4);
+}
+
+#page-dashboard .dashboard-wall-cta-hint {
+    margin: 0;
+    color: var(--dash-text-dim);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    line-height: 1.5;
+}
+
+#page-dashboard .dashboard-wall-cta-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border: 1px solid rgba(79, 214, 255, 0.55);
+    border-radius: 3px;
+    background: linear-gradient(180deg, rgba(79, 214, 255, 0.24), rgba(79, 214, 255, 0.1));
+    color: #e8f8ff;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    white-space: nowrap;
+    box-shadow: 0 0 18px rgba(79, 214, 255, 0.22);
+    transition: background 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+#page-dashboard .dashboard-wall-cta-btn:hover {
+    background: linear-gradient(180deg, rgba(79, 214, 255, 0.34), rgba(79, 214, 255, 0.16));
+    box-shadow: 0 0 26px rgba(79, 214, 255, 0.42);
+    transform: translateY(-1px);
+}
+
+#page-dashboard .dashboard-wall-cta-btn:focus-visible {
+    outline: 2px solid var(--dash-cyan);
+    outline-offset: 2px;
+}
+
+/* ---- 窄屏收拢 ---------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+    #page-dashboard .dashboard-board-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    #page-dashboard .dashboard-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 560px) {
+    #page-dashboard .dashboard-situation-content {
+        padding: 12px;
+    }
+
+    #page-dashboard .dashboard-metric-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #page-dashboard .dashboard-wall-cta {
+        padding: 14px;
+    }
+
+    #page-dashboard .dashboard-wall-cta-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    #page-dashboard .dashboard-live-row {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+            "time host"
+            "title title";
+        align-items: start;
+        gap: 1px 10px;
+    }
+
+    #page-dashboard .dashboard-live-title {
+        white-space: normal;
+    }
+}
+
