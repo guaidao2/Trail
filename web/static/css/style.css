@@ -40550,3 +40550,462 @@ html[data-theme="dark"] .ioc-detail > h3 small {
     }
 }
 
+
+/* ==========================================================================
+   威胁情报页面
+   两类情报必须视觉上分开：信誉判定（恶意/可疑）用状态色，
+   暴露面（端口/CPE/漏洞）用中性色，避免把"开着 80 端口"看成"被判定恶意"。
+   ========================================================================== */
+
+.threat-intel-page-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.threat-intel-hint {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+}
+
+/* ---- 源健康带 ---- */
+
+.threat-sources-bar {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+}
+
+.threat-sources-title {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding-top: 3px;
+    white-space: nowrap;
+}
+
+.threat-sources {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 8px;
+    width: 100%;
+}
+
+.threat-source-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--card-bg);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    cursor: default;
+}
+
+.threat-source-chip.has-error {
+    border-color: #dc3545;
+}
+
+.threat-source-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.threat-source-chip > span:not(.threat-source-name) {
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.threat-source-mode,
+.threat-source-quota,
+.threat-source-count {
+    color: var(--text-secondary);
+}
+
+.threat-source-off {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+}
+
+.threat-source-key {
+    color: var(--accent-color);
+}
+
+/* ---- 查询区 ---- */
+
+.threat-query-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--card-bg);
+    padding: 16px;
+}
+
+.threat-query-title {
+    margin: 0 0 12px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.threat-query-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* 表单控件必须自己写全套样式：页面里没有统一的 input 基类，
+   只吃浏览器默认样式会出现 0 padding、0 圆角的裸控件。 */
+.threat-query-type,
+.threat-query-input {
+    box-sizing: border-box;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    line-height: 34px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.threat-query-type {
+    flex: 0 0 96px;
+    padding-right: 4px;
+}
+
+.threat-query-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.threat-query-input::placeholder {
+    color: var(--text-muted);
+}
+
+.threat-query-type:focus,
+.threat-query-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.12);
+}
+
+.threat-query-row .btn-primary {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    height: 36px;
+    padding: 0 20px;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+}
+
+.threat-query-result {
+    margin-top: 14px;
+}
+
+.threat-result-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.threat-result-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.threat-result-note {
+    margin-top: 10px;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+.threat-result-section {
+    margin-top: 16px;
+}
+
+.threat-result-section h4 {
+    margin: 0 0 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+}
+
+.threat-result-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    background: var(--bg-secondary);
+}
+
+.threat-result-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.threat-result-source {
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+
+.threat-result-summary {
+    margin-top: 6px;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    word-break: break-word;
+}
+
+.threat-result-tags {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.threat-tag {
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    font-size: 0.6875rem;
+    color: var(--text-secondary);
+}
+
+.threat-result-expire {
+    margin-top: 6px;
+    font-size: 0.6875rem;
+}
+
+.threat-cached {
+    font-size: 0.6875rem;
+    color: var(--text-secondary);
+    border: 1px dashed var(--border-color);
+    border-radius: 4px;
+    padding: 0 5px;
+}
+
+.threat-verdict {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.threat-verdict.is-danger {
+    color: #dc3545;
+    border-color: #dc3545;
+    background: rgba(220, 53, 69, 0.08);
+}
+
+.threat-verdict.is-warn {
+    color: #d97706;
+    border-color: #d97706;
+    background: rgba(217, 119, 6, 0.08);
+}
+
+.threat-verdict.is-info {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    background: rgba(0, 102, 255, 0.06);
+}
+
+.threat-verdict.is-ok {
+    color: #198754;
+    border-color: #198754;
+    background: rgba(25, 135, 84, 0.08);
+}
+
+.threat-verdict.is-muted {
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+.threat-feed-hits {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.threat-feed-hit {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-size: 0.8125rem;
+    flex-wrap: wrap;
+}
+
+.threat-feed-source {
+    font-weight: 600;
+}
+
+.threat-feed-cat,
+.threat-feed-malware {
+    color: var(--text-secondary);
+}
+
+.threat-skipped {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.75rem;
+}
+
+.threat-skipped-item {
+    padding: 1px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.threat-error {
+    color: #dc3545;
+    font-size: 0.8125rem;
+}
+
+/* ---- 订阅区 ---- */
+
+.threat-feed-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: var(--card-bg);
+    padding: 16px;
+}
+
+.threat-feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.threat-feed-header h3 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.threat-feed-filters {
+    margin: 0;
+}
+
+.threat-feed-table td,
+.threat-feed-table th {
+    font-size: 0.8125rem;
+}
+
+.threat-feed-value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
+    max-width: 420px;
+}
+
+@media (max-width: 768px) {
+    .threat-query-type,
+    .threat-query-input {
+        flex: 1 1 100%;
+    }
+    .threat-sources-bar {
+        flex-direction: column;
+    }
+}
+
+.threat-result-actions {
+    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.threat-result-actions .btn-sm {
+    font-size: 0.75rem;
+    padding: 3px 10px;
+}
+
+/* ==========================================================================
+   可切换明文的输入框（代理地址、API Key）
+   与登录页那套 .login-password-* 分开：登录页的样式挂在 .login-form 下，
+   设置页复用会被选择器隔离掉。这套是通用的，任何 .secret-field 都适用。
+   ========================================================================== */
+
+.secret-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.secret-field .form-input {
+    width: 100%;
+    /* 给右侧的切换按钮留位置，避免长值被图标压住 */
+    padding-inline-end: 42px;
+}
+
+.secret-toggle {
+    position: absolute;
+    inset-inline-end: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.secret-toggle:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.secret-toggle:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 1px;
+}
+
+.secret-toggle .secret-icon--hide {
+    display: none;
+}
+
+.secret-toggle.is-visible .secret-icon--show {
+    display: none;
+}
+
+.secret-toggle.is-visible .secret-icon--hide {
+    display: block;
+}

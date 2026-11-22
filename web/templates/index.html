@@ -327,6 +327,16 @@
                             <span data-i18n="ioc.title">IOC 情报</span>
                         </div>
                     </div>
+                    <div class="nav-item" data-page="threat-intel">
+                        <div class="nav-item-content" data-title="威胁情报" onclick="switchPage('threat-intel')" data-i18n="nav.threatIntel" data-i18n-attr="data-title" data-i18n-skip-text="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="6"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                            </svg>
+                            <span data-i18n="nav.threatIntel">威胁情报</span>
+                        </div>
+                    </div>
                     <div class="nav-section-label" role="presentation">
                         <span data-i18n="navGroups.capabilities">能力中心</span>
                     </div>
@@ -2101,6 +2111,95 @@
                         <div id="ioc-detail" class="ioc-detail" style="display:none;"></div>
                     </div>
                 </div>
+                <div id="page-threat-intel" class="page">
+                    <div class="page-header">
+                        <h2 data-i18n="nav.threatIntel">威胁情报</h2>
+                        <div class="page-header-actions">
+                            <button id="threat-sync-btn" class="btn-secondary" data-require-permission="threatintel:write" onclick="syncThreatFeed()" data-i18n="threatIntel.sync">同步订阅源</button>
+                            <button class="btn-secondary" onclick="loadThreatSources(); loadThreatFeed(1);" data-i18n="common.refresh">刷新</button>
+                        </div>
+                    </div>
+                    <div class="page-content threat-intel-page-content">
+                        <div class="threat-intel-hint" data-i18n="threatIntel.intro">这里展示外部情报源的观测事实，不等于我们研判出的 IOC。要封禁或改状态，请到 IOC 情报页。</div>
+
+                        <div class="threat-sources-bar">
+                            <span class="threat-sources-title" data-i18n="threatIntel.sourcesTitle">情报源</span>
+                            <div id="threat-sources" class="threat-sources"></div>
+                        </div>
+
+                        <div class="threat-query-panel">
+                            <h3 class="threat-query-title" data-i18n="threatIntel.queryTitle">指标查询</h3>
+                            <div class="threat-query-row">
+                                <select id="threat-query-type" class="threat-query-type">
+                                    <option value="ip">ip</option>
+                                    <option value="domain">domain</option>
+                                    <option value="url">url</option>
+                                    <option value="md5">md5</option>
+                                    <option value="sha1">sha1</option>
+                                    <option value="sha256">sha256</option>
+                                </select>
+                                <input type="text" id="threat-query-value" class="threat-query-input"
+                                       placeholder="8.8.8.8 / evil.example.com / https://… / 哈希"
+                                       data-i18n="threatIntel.queryPlaceholder" data-i18n-attr="placeholder"
+                                       onkeydown="if (event.key === 'Enter') runThreatQuery()" />
+                                <button class="btn-primary" onclick="runThreatQuery()" data-i18n="threatIntel.query">查询</button>
+                            </div>
+                            <div id="threat-query-result" class="threat-query-result"></div>
+                        </div>
+
+                        <div class="threat-feed-panel">
+                            <div class="threat-feed-header">
+                                <h3 data-i18n="threatIntel.feedTitle">订阅情报</h3>
+                                <div class="batch-queues-filters tasks-filters batch-queues-filters--compact threat-feed-filters">
+                                    <label>
+                                        <span data-i18n="threatIntel.searchLabel">搜索</span>
+                                        <input type="text" id="threat-feed-search" placeholder="指标 / 家族 / 标签"
+                                               data-i18n="threatIntel.feedSearchPlaceholder" data-i18n-attr="placeholder"
+                                               oninput="loadThreatFeed(1)" />
+                                    </label>
+                                    <label>
+                                        <span data-i18n="threatIntel.sourceLabel">来源</span>
+                                        <select id="threat-feed-source" onchange="loadThreatFeed(1)">
+                                            <option value="" data-i18n="threatIntel.allSources">全部来源</option>
+                                        </select>
+                                    </label>
+                                    <label>
+                                        <span data-i18n="threatIntel.typeLabel">类型</span>
+                                        <select id="threat-feed-type" onchange="loadThreatFeed(1)">
+                                            <option value="" data-i18n="common.all">全部</option>
+                                            <option value="ip">ip</option>
+                                            <option value="domain">domain</option>
+                                            <option value="url">url</option>
+                                            <option value="hash" data-i18n="threatIntel.typeHash">hash（全部哈希）</option>
+                                            <option value="md5">md5</option>
+                                            <option value="sha1">sha1</option>
+                                            <option value="sha256">sha256</option>
+                                            <option value="cidr">cidr</option>
+                                        </select>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="table-container">
+                                <table class="data-table threat-feed-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="threatIntel.colValue">指标</th>
+                                            <th data-i18n="threatIntel.colType">类型</th>
+                                            <th data-i18n="threatIntel.colSource">来源</th>
+                                            <th data-i18n="threatIntel.colCategory">类别</th>
+                                            <th data-i18n="threatIntel.colMalware">家族 / 说明</th>
+                                            <th data-i18n="threatIntel.colLastSeen">最近出现</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="threat-feed-body">
+                                        <tr><td colspan="6" class="is-muted" data-i18n="common.loading">加载中…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="threat-feed-pagination" class="pagination-container"></div>
+                        </div>
+                    </div>
+                </div>
                 <div id="page-hosts" class="page">
                     <div class="page-header">
                         <h2 data-i18n="hosts.title">主机管理</h2>
@@ -2655,6 +2754,9 @@
                                 </div>
                                 <div class="settings-nav-item" data-section="vuln-intel" onclick="switchSettingsSection('vuln-intel')">
                                     <span data-i18n="settings.nav.vulnIntel">漏洞情报</span>
+                                </div>
+                                <div class="settings-nav-item" data-section="threat-intel" onclick="switchSettingsSection('threat-intel')">
+                                    <span data-i18n="settings.nav.threatIntel">威胁情报</span>
                                 </div>
                                 <div class="settings-nav-item" data-section="storage" onclick="switchSettingsSection('storage')">
                                     <span data-i18n="settings.nav.storage">存储清理</span>
@@ -4160,7 +4262,13 @@
                                     </div>
                                     <div class="form-group">
                                         <label for="vuln-intel-proxy" data-i18n="settingsVulnIntel.proxy">出口代理</label>
-                                        <input type="text" id="vuln-intel-proxy" class="form-input" placeholder="http://127.0.0.1:7890" />
+                                        <div class="secret-field">
+                                            <input type="password" id="vuln-intel-proxy" class="form-input" placeholder="http://127.0.0.1:7890" />
+                                            <button type="button" class="secret-toggle" aria-label="显示" title="显示" aria-pressed="false" data-i18n="common.showSecret" data-i18n-attr="aria-label,title" onclick="toggleSecretVisibility('vuln-intel-proxy', this)">
+                                                <svg class="secret-icon secret-icon--show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                                                <svg class="secret-icon secret-icon--hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 3 18 18M10.6 5.1A12 12 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.2 6.2A18 18 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.8-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+                                            </button>
+                                        </div>
                                         <small class="form-hint" data-i18n="settingsVulnIntel.proxyHint">五个源共用；GHSA 与 PoC 走 api.github.com 的 HTTPS 接口，普通 HTTP 代理即可。留空则使用 HTTPS_PROXY / HTTP_PROXY 环境变量。</small>
                                     </div>
                                     <div class="form-group">
@@ -4205,6 +4313,113 @@
                                     </div>
                                     <div class="form-actions">
                                         <button class="btn-primary" onclick="saveVulnIntelSettings()" data-i18n="common.save">保存</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 威胁情报 -->
+                            <div id="settings-section-threat-intel" class="settings-section-content">
+                                <div class="settings-section-header">
+                                    <h3 data-i18n="settingsThreatIntel.title">威胁情报</h3>
+                                </div>
+                                <p class="form-hint" data-i18n="settingsThreatIntel.subtitle">外部情报源的接入配置。免 Key 的五个源（InternetDB / GreyNoise / OTX / Spamhaus / Feodo）不填也能用；填了 Key 才会启用 AbuseIPDB、VirusTotal 与 abuse.ch 的两个订阅源。</p>
+
+                                <div class="settings-form">
+                                    <div class="form-group">
+                                        <label class="checkbox-label">
+                                            <input type="checkbox" id="threat-intel-enabled" />
+                                            <span data-i18n="settingsThreatIntel.enabled">启用订阅源自动同步</span>
+                                        </label>
+                                        <small class="form-hint" data-i18n="settingsThreatIntel.enabledHint">只影响订阅源（URLhaus / ThreatFox / Feodo / Spamhaus）的定时拉取；查询式源是点一次查一次，不受影响。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="threat-intel-proxy" data-i18n="settingsThreatIntel.proxy">出口代理</label>
+                                        <div class="secret-field">
+                                            <input type="password" id="threat-intel-proxy" class="form-input" placeholder="http://127.0.0.1:7890" />
+                                            <button type="button" class="secret-toggle" aria-label="显示" title="显示" aria-pressed="false" data-i18n="common.showSecret" data-i18n-attr="aria-label,title" onclick="toggleSecretVisibility('threat-intel-proxy', this)">
+                                                <svg class="secret-icon secret-icon--show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                                                    <circle cx="12" cy="12" r="3" />
+                                                </svg>
+                                                <svg class="secret-icon secret-icon--hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                                                    <path d="m3 3 18 18M10.6 5.1A12 12 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.2 6.2A18 18 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.8-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <small class="form-hint" data-i18n="settingsThreatIntel.proxyHint">所有情报源共用；留空则跟随 HTTPS_PROXY / HTTP_PROXY 环境变量。不要把用户名密码写进代理地址——该字段会明文回显给有 config:read 权限的人。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="threat-intel-timeout" data-i18n="settingsThreatIntel.timeout">单请求超时</label>
+                                        <input type="text" id="threat-intel-timeout" class="form-input" placeholder="30s" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="threat-intel-feed-sync-interval" data-i18n="settingsThreatIntel.feedSyncInterval">订阅同步间隔</label>
+                                        <input type="text" id="threat-intel-feed-sync-interval" class="form-input" placeholder="6h" />
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="threat-intel-feed-ttl-days" data-i18n="settingsThreatIntel.feedTTLDays">订阅条目保留天数</label>
+                                        <input type="number" id="threat-intel-feed-ttl-days" class="form-input" min="1" max="3650" placeholder="90" />
+                                        <small class="form-hint" data-i18n="settingsThreatIntel.feedTTLDaysHint">超过保留期的条目会在同步后清理，避免上游已撤下的情报长期留在本地。留空表示不改，不是恢复默认。</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="threat-intel-cache-ttl-seconds" data-i18n="settingsThreatIntel.cacheTTL">查询缓存时长（秒）</label>
+                                        <input type="number" id="threat-intel-cache-ttl-seconds" class="form-input" min="0" max="604800" placeholder="3600" />
+                                        <small class="form-hint" data-i18n="settingsThreatIntel.cacheTTLHint">源自己会给过期时间，这里只是兜底；同时作为源的默认 ttl_seconds 写进库。留空表示不改。</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label data-i18n="settingsThreatIntel.keys">API Key</label>
+                                        <label for="threat-intel-abuseipdb-key" class="form-hint">AbuseIPDB</label>
+                                        <div class="secret-field">
+                                            <input type="password" id="threat-intel-abuseipdb-key" class="form-input" placeholder="可选，免费 1000 次/天" />
+                                            <button type="button" class="secret-toggle" aria-label="显示" title="显示" aria-pressed="false" data-i18n="common.showSecret" data-i18n-attr="aria-label,title" onclick="toggleSecretVisibility('threat-intel-abuseipdb-key', this)">
+                                                <svg class="secret-icon secret-icon--show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                                                <svg class="secret-icon secret-icon--hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 3 18 18M10.6 5.1A12 12 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.2 6.2A18 18 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.8-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+                                            </button>
+                                        </div>
+                                        <label for="threat-intel-virustotal-key" class="form-hint">VirusTotal</label>
+                                        <div class="secret-field">
+                                            <input type="password" id="threat-intel-virustotal-key" class="form-input" placeholder="可选，免费 500 次/天、4 次/分" />
+                                            <button type="button" class="secret-toggle" aria-label="显示" title="显示" aria-pressed="false" data-i18n="common.showSecret" data-i18n-attr="aria-label,title" onclick="toggleSecretVisibility('threat-intel-virustotal-key', this)">
+                                                <svg class="secret-icon secret-icon--show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                                                <svg class="secret-icon secret-icon--hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 3 18 18M10.6 5.1A12 12 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.2 6.2A18 18 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.8-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+                                            </button>
+                                        </div>
+                                        <label for="threat-intel-urlhaus-key" class="form-hint">URLhaus（abuse.ch Auth-Key）</label>
+                                        <div class="secret-field">
+                                            <input type="password" id="threat-intel-urlhaus-key" class="form-input" placeholder="可选" />
+                                            <button type="button" class="secret-toggle" aria-label="显示" title="显示" aria-pressed="false" data-i18n="common.showSecret" data-i18n-attr="aria-label,title" onclick="toggleSecretVisibility('threat-intel-urlhaus-key', this)">
+                                                <svg class="secret-icon secret-icon--show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                                                <svg class="secret-icon secret-icon--hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 3 18 18M10.6 5.1A12 12 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.2 6.2A18 18 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.8-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+                                            </button>
+                                        </div>
+                                        <label for="threat-intel-threatfox-key" class="form-hint">ThreatFox（abuse.ch Auth-Key）</label>
+                                        <div class="secret-field">
+                                            <input type="password" id="threat-intel-threatfox-key" class="form-input" placeholder="可选，与 URLhaus 可用同一把 Key" />
+                                            <button type="button" class="secret-toggle" aria-label="显示" title="显示" aria-pressed="false" data-i18n="common.showSecret" data-i18n-attr="aria-label,title" onclick="toggleSecretVisibility('threat-intel-threatfox-key', this)">
+                                                <svg class="secret-icon secret-icon--show" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
+                                                <svg class="secret-icon secret-icon--hide" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 3 18 18M10.6 5.1A12 12 0 0 1 12 5c6.5 0 10 7 10 7a18 18 0 0 1-3 4M6.2 6.2A18 18 0 0 0 2 12s3.5 7 10 7a12 12 0 0 0 5.8-1.8M9.9 9.9a3 3 0 0 0 4.2 4.2" /></svg>
+                                            </button>
+                                        </div>
+                                        <small class="form-hint" data-i18n="settingsThreatIntel.keysHint">已保存的 Key 会显示为掩码；填新值才会覆盖，留空表示不改。abuse.ch 的 Auth-Key 在 auth.abuse.ch 免费注册。</small>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label data-i18n="settingsThreatIntel.disabledSources">停用的源</label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="internetdb" /><span>Shodan InternetDB</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="greynoise" /><span>GreyNoise</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="otx" /><span>AlienVault OTX</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="abuseipdb" /><span>AbuseIPDB</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="virustotal" /><span>VirusTotal</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="spamhaus_drop" /><span>Spamhaus DROP</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="feodo" /><span>Feodo Tracker</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="urlhaus" /><span>URLhaus</span></label>
+                                        <label class="checkbox-label"><input type="checkbox" class="threat-intel-disabled" value="threatfox" /><span>ThreatFox</span></label>
+                                        <small class="form-hint" data-i18n="settingsThreatIntel.disabledSourcesHint">勾选即停用。取消勾选可恢复——配置是启停的唯一权威，库里残留的停用状态会被覆盖。</small>
+                                    </div>
+
+                                    <div class="form-actions">
+                                        <button class="btn-primary" onclick="saveThreatIntelSettings()" data-require-permission="config:write" data-i18n="common.save">保存</button>
                                     </div>
                                 </div>
                             </div>
@@ -6001,6 +6216,7 @@
     <script src="/static/js/ioc.js?v=20261121-page"></script>
     <script src="/static/js/memory.js?v=20261121-page"></script>
     <script src="/static/js/vuln-intel.js?v=20261121-page"></script>
+    <script src="/static/js/threat-intel.js?v=20261122-page"></script>
     <!-- 移动端交互层：必须最后加载，它包装 window.switchPage 并注入移动端 DOM -->
 </body>
 </html>

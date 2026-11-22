@@ -36,6 +36,8 @@ var PermissionCatalog = map[string]string{
 	"host:exec":            "Execute commands on managed hosts",
 	"ioc:read":             "View IOC intelligence records and their host hits",
 	"ioc:write":            "Create, update, and block/unblock IOC intelligence records",
+	"threatintel:read":     "View threat intelligence sources, run lookups (which call external sources), and browse subscription feed entries",
+	"threatintel:write":    "Sync external subscription feeds and adopt observations into the IOC library",
 	"memory:read":          "Read agent memories (critical / long-term / short-term)",
 	"memory:write":         "Create, update, and delete agent memories",
 	"intel:read":           "Read vulnerability intelligence (NVD / KEV / EPSS / GHSA)",

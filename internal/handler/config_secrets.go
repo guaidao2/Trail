@@ -13,7 +13,10 @@ const maskedSecret = "********"
 
 func secretConfigKey(key string) bool {
 	switch strings.ToLower(key) {
-	case "api_key", "apikey", "password", "secret", "client_secret", "app_secret", "token", "bot_token", "app_token", "verify_token", "encoding_aes_key", "authorization", "x-api-key", "nvd_api_key", "github_token":
+	case "api_key", "apikey", "password", "secret", "client_secret", "app_secret", "token", "bot_token", "app_token", "verify_token", "encoding_aes_key", "authorization", "x-api-key", "nvd_api_key", "github_token",
+		// 威胁情报的四个源 Key。字段名必须逐个列出：掩码是按字段名精确匹配的，
+		// 漏一个就会把明文回显给所有能读配置的人。
+		"abuseipdb_key", "virustotal_key", "urlhaus_key", "threatfox_key":
 		return true
 	}
 	return false
@@ -23,7 +26,10 @@ func configSecretSnapshot(cfg *config.Config) GetConfigResponse {
 	return GetConfigResponse{AI: cfg.AI, OpenAI: cfg.OpenAI, Vision: cfg.Vision, FOFA: cfg.FOFA,
 		ZoomEye: cfg.ZoomEye, Quake: cfg.Quake, Shodan: cfg.Shodan, MCP: cfg.MCP,
 		Hitl: cfg.Hitl, Knowledge: cfg.Knowledge, Robots: cfg.Robots,
-		VulnIntel: &cfg.VulnIntel}
+		VulnIntel: &cfg.VulnIntel,
+		// 威胁情报也必须带上：否则保存时前端回填的 `********` 在 previous 里
+		// 找不到原值，会被当成"没有已保存凭据"直接报错，等于配一次就坏一次。
+		ThreatIntel: &cfg.ThreatIntel}
 }
 
 func jsonSecretTree(value interface{}) (interface{}, error) {

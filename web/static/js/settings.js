@@ -761,6 +761,7 @@ async function loadConfig(loadTools = true, options = {}) {
         
         currentConfig = await response.json();
         applyVulnIntelSettings(currentConfig && currentConfig.vuln_intel);
+        applyThreatIntelSettings(currentConfig && currentConfig.threat_intel);
         const alwaysVisibleConfigured = currentConfig?.multi_agent?.tool_search_always_visible_tools;
         const alwaysVisibleEffective = currentConfig?.multi_agent?.tool_search_always_visible_effective_tools;
         alwaysVisibleToolNames = new Set();
@@ -4978,3 +4979,117 @@ async function saveVulnIntelSettings() {
 
 window.applyVulnIntelSettings = applyVulnIntelSettings;
 window.saveVulnIntelSettings = saveVulnIntelSettings;
+
+// ---- 威胁情报设置 ----
+
+// applyThreatIntelSettings 把后端配置回填到表单（GET /api/config 的 threat_intel 段）。
+// Key 字段拿到的是 `********` 掩码，原样留在输入框里，用户不改就不会覆盖。
+function applyThreatIntelSettings(t) {
+    if (!t) return;
+    const set = (id, val) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        if (node.type === 'checkbox') node.checked = !!val;
+        else node.value = val == null ? '' : String(val);
+    };
+    set('threat-intel-enabled', t.enabled);
+    set('threat-intel-proxy', t.proxy);
+    set('threat-intel-timeout', t.timeout);
+    set('threat-intel-feed-sync-interval', t.feed_sync_interval);
+    set('threat-intel-feed-ttl-days', t.feed_ttl_days);
+    set('threat-intel-cache-ttl-seconds', t.cache_ttl_seconds);
+    set('threat-intel-abuseipdb-key', t.abuseipdb_key);
+    set('threat-intel-virustotal-key', t.virustotal_key);
+    set('threat-intel-urlhaus-key', t.urlhaus_key);
+    set('threat-intel-threatfox-key', t.threatfox_key);
+
+    // 停用名单是「勾选即停用」，后端存的是源标识数组。
+    const disabled = new Set((t.disabled_sources || []).map(function (s) { return String(s).toLowerCase(); }));
+    document.querySelectorAll('.threat-intel-disabled').forEach(function (cb) {
+        cb.checked = disabled.has(String(cb.value).toLowerCase());
+    });
+}
+
+// saveThreatIntelSettings 只提交威胁情报这一段，不覆盖其它设置。
+async function saveThreatIntelSettings() {
+    const val = (id) => {
+        const node = document.getElementById(id);
+        return node ? String(node.value || '').trim() : '';
+    };
+    const checked = (id) => {
+        const node = document.getElementById(id);
+        return !!(node && node.checked);
+    };
+    const payload = {
+        threat_intel: {
+            enabled: checked('threat-intel-enabled'),
+            proxy: val('threat-intel-proxy'),
+            timeout: val('threat-intel-timeout'),
+            feed_sync_interval: val('threat-intel-feed-sync-interval'),
+            abuseipdb_key: val('threat-intel-abuseipdb-key'),
+            virustotal_key: val('threat-intel-virustotal-key'),
+            urlhaus_key: val('threat-intel-urlhaus-key'),
+            threatfox_key: val('threat-intel-threatfox-key'),
+            // 停用名单每次提交完整状态：空数组表示全部启用。
+            disabled_sources: Array.prototype.slice.call(document.querySelectorAll('.threat-intel-disabled'))
+                .filter(function (cb) { return cb.checked; })
+                .map(function (cb) { return cb.value; }),
+        },
+    };
+    // 数字字段留空表示"不改"（后端按字段合并，省略即保留原值）。
+    const ttlDays = val('threat-intel-feed-ttl-days');
+    if (ttlDays !== '' && !isNaN(Number(ttlDays))) {
+        payload.threat_intel.feed_ttl_days = Number(ttlDays);
+    }
+    const cacheTTL = val('threat-intel-cache-ttl-seconds');
+    if (cacheTTL !== '' && !isNaN(Number(cacheTTL))) {
+        payload.threat_intel.cache_ttl_seconds = Number(cacheTTL);
+    }
+
+    try {
+        const resp = await apiFetch('/api/config', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+            const data = await resp.json().catch(function () { return {}; });
+            throw new Error(data.error || '保存失败');
+        }
+        // 保存成功后重新拉一次并回填：密钥会被替换成掩码，避免明文一直留在输入框里。
+        try {
+            const fresh = await (await apiFetch('/api/config')).json();
+            applyThreatIntelSettings(fresh && fresh.threat_intel);
+        } catch (e) { /* 回填失败不影响保存结果 */ }
+        if (typeof showNotification === 'function') {
+            const msg = (typeof window.t === 'function' && window.t('settingsThreatIntel.saved') !== 'settingsThreatIntel.saved')
+                ? window.t('settingsThreatIntel.saved')
+                : '威胁情报配置已保存';
+            showNotification(msg, 'success');
+        }
+    } catch (err) {
+        if (typeof showNotification === 'function') showNotification(err.message, 'error');
+    }
+}
+
+window.applyThreatIntelSettings = applyThreatIntelSettings;
+window.saveThreatIntelSettings = saveThreatIntelSettings;
+
+// ---- 可切换明文的输入框（代理地址、API Key）----
+// 代理地址常写成 http://user:pass@host，Key 也需要核对字符；
+// 输入时默认遮住，点右侧的眼睛按钮临时看明文。
+function toggleSecretVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input || !btn) return;
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    btn.classList.toggle('is-visible', visible);
+    btn.setAttribute('aria-pressed', String(visible));
+    const label = visible
+        ? (typeof window.t === 'function' ? window.t('common.hideSecret') : '隐藏')
+        : (typeof window.t === 'function' ? window.t('common.showSecret') : '显示');
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('title', label);
+}
+
+window.toggleSecretVisibility = toggleSecretVisibility;

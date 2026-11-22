@@ -4,7 +4,7 @@
 
 # 溯痕（CyberstrikeAI 蓝队版）
 
-> 英文名 **Trail** · 仓库 `guaidao2/Trail` · 版本 **v1.3.0**
+> 英文名 **Trail** · 仓库 `guaidao2/Trail` · 版本 **v1.4.0**
 
 [中文](README_CN.md) | [English](README.md)
 
@@ -14,9 +14,17 @@
 
 **从这里开始：** [快速上手](#快速上手一条命令部署) · [中文文档](docs/zh-CN/README.md) · [安全加固](docs/zh-CN/security-hardening.md)
 
-## 本版（v1.3.0）包含什么
+## 本版（v1.4.0）新增什么
 
-这是从 [CyberStrikeAI](https://github.com/Ed1s0nZ/CyberStrikeAI) 分叉后重构的第一个正式版本，定位为**纯蓝队/运维构建**：
+**威胁情报**：一个与「IOC 情报」「漏洞情报」平级但数据分离的独立模块。外部源报的是观测事实（只读、带 TTL、永不自动封禁），IOC 库是人研判出的结论（状态机、可封禁）；两者之间只留一个显式动作「采纳为 IOC」，需要同时具备 `threatintel:write` 与 `ioc:write`。
+
+- **查询式情报源**：Shodan InternetDB（暴露面：端口 / CPE / 已知漏洞）、GreyNoise（区分全网扫描器与定向攻击）、AlienVault OTX（社区 pulse）三者免 Key 可用；AbuseIPDB 与 VirusTotal 需自备 Key，未配置时跳过并标注，不计为失败。
+- **订阅式情报源**：Spamhaus DROP（失陷网段）、Feodo Tracker（C2 IP）免 Key；URLhaus（恶意 URL）、ThreatFox（IOC 共享库）需 abuse.ch Auth-Key。支持定时同步与手动触发。
+- **判定分栏**：「暴露面」与「信誉判定」在数据层和界面上都分开，开着 80 端口不会被渲染成「这个 IP 可疑」。
+- **配额与节流**：按源配置日配额与每分钟节流，免费档默认值取各源自身声明，避免一次批量任务把额度打光；结果带 TTL 缓存，查过无结果的指标也落负缓存。
+- **配置可视化**：系统设置页新增「威胁情报」区块，可改启停、代理、超时、同步间隔、条数保留、缓存时长、四个源的 Key 与九个源的停用勾选，保存写回 `config.yaml`；Key 在接口里统一掩码，代理与 Key 输入框支持明暗文切换。
+
+**v1.3.0 的主体能力仍然在内**。项目从 [CyberStrikeAI](https://github.com/Ed1s0nZ/CyberStrikeAI) 分叉后重构，定位为**纯蓝队/运维构建**，本版在其上补齐了威胁情报这一块：
 
 - **主机纳管**：以主机为唯一顶层对象；SSH（密码/私钥）与 Telnet 凭据使用 AES-256-GCM 加密入库，界面与接口只回显「已配置」，主机密钥采用 TOFU 首次信任并在后续连接强制校验。
 - **远程运维**：命令执行、文件上传/下载（base64 管道，单次 8 MiB）、连通性探测与系统信息采集，全部经 `host:read` / `host:write` / `host:exec` 三级权限与审计。

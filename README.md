@@ -4,7 +4,7 @@
 
 # Trail (CyberstrikeAI Blue)
 
-> Chinese name **溯痕** · repository `guaidao2/Trail` · version **v1.3.0**
+> Chinese name **溯痕** · repository `guaidao2/Trail` · version **v1.4.0**
 
 [中文](README_CN.md) | [English](README.md)
 
@@ -14,9 +14,17 @@ Trail puts planning, execution, human oversight, evidence, and replay in one aud
 
 **Start here:** [Quick start](#quick-start-one-command-deployment) · [Documentation](docs/en-US/README.md) · [Security hardening](docs/en-US/security-hardening.md)
 
-## What's in v1.3.0
+## What's new in v1.4.0
 
-This is the first release after forking [CyberStrikeAI](https://github.com/Ed1s0nZ/CyberStrikeAI) and refocusing it as a **blue-team / operations-only build**:
+**Threat intel** — a first-class module alongside IOC intel and vulnerability intel, deliberately kept separate from both. External sources report observations (read-only, TTL'd, never auto-blocked); the IOC library holds verdicts a human stands behind (state machine, blockable). The only bridge is an explicit **Adopt as IOC** action, gated by both `threatintel:write` and `ioc:write`.
+
+- **Lookup sources** — Shodan InternetDB (exposure: ports / CPEs / known CVEs), GreyNoise (internet-wide scanners vs. targeted attacks) and AlienVault OTX (community pulses) work without any key; AbuseIPDB and VirusTotal need your own key and are skipped with a clear label when absent, never counted as failures.
+- **Subscription feeds** — Spamhaus DROP (hijacked netblocks) and Feodo Tracker (C2 IPs) are key-free; URLhaus (malware URLs) and ThreatFox (shared IOCs) need an abuse.ch Auth-Key. Both scheduled sync and manual trigger are supported.
+- **Split verdicts** — "exposure" and "reputation" are separated in the data model and the UI, so an open port 80 is never rendered as "this IP is suspicious".
+- **Quotas and throttling** — per-source daily quotas and per-minute rate limits, with free-tier defaults taken from each source's own limits, so one batch job cannot burn the day's allowance; results are cached with a TTL and negative lookups are cached too.
+- **Config UI** — a Threat Intel section in Settings covers enable/disable, proxy, timeout, sync interval, retention, cache TTL, the four source keys and per-source disable toggles, persisted to `config.yaml`. Keys are masked in the API, and proxy/key inputs support mask/plaintext toggling.
+
+The v1.3.0 feature set remains in place. The project was forked from [CyberStrikeAI](https://github.com/Ed1s0nZ/CyberStrikeAI) and refocused as a **blue-team / operations-only build**; this release fills in the threat-intel piece:
 
 - **Host onboarding** — hosts are the only top-level object; SSH (password/key) and Telnet credentials are stored with AES-256-GCM, never echoed back, and host keys use TOFU trust with enforced verification afterwards.
 - **Remote operations** — command execution, file upload/download (base64 pipeline, 8 MiB cap), connectivity probe and system facts, all gated by `host:read` / `host:write` / `host:exec` and fully audited.

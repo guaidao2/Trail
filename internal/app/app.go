@@ -27,13 +27,14 @@ import (
 	"trail/internal/logger"
 	"trail/internal/mcp"
 	"trail/internal/monitor"
-	"trail/internal/vulnintel"
 	"trail/internal/multiagent"
 	"trail/internal/robot"
 	"trail/internal/security"
 	"trail/internal/skillpackage"
 	"trail/internal/storage"
+	"trail/internal/threatintel"
 	"trail/internal/toolguard"
+	"trail/internal/vulnintel"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -182,6 +183,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	registerHostTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
 	registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
+	registerThreatIntelTools(mcpServer, db, log.Logger)
 	registerMemoryTools(mcpServer, db, log.Logger)
 	registerVulnIntelTools(mcpServer, db, hostSecretBox, cfg, log.Logger)
 
@@ -478,7 +480,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 			syncCfg.GHSAEnabled = false
 			syncCfg.POCEnabled = false
 			syncCfg.OSVEnabled = true
-			syncCfg.OSVForce = true // 手动触发走全量重导，不受上次游标影响
+			syncCfg.OSVForce = true            // 手动触发走全量重导，不受上次游标影响
 			syncCfg.MaxRuntime = 6 * time.Hour // 全量生态包体量大，给足时间
 			// 全量导入可能跑几小时，不能绑在请求 ctx 上：前端断开不应中止导入。
 			var cancelOSV context.CancelFunc
@@ -559,6 +561,56 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 	configHandler := handler.NewConfigHandler(configPath, cfg, mcpServer, executor, agent, externalMCPMgr, log.Logger)
 	// 让后台同步协程与 MCP 工具通过读锁拿配置副本，避免与 UpdateConfig 的写入竞争。
 	vulnIntelCfgSnapshot = configHandler.VulnIntelSnapshot
+	threatIntelCfgSnapshot = configHandler.ThreatIntelSnapshot
+
+	// 威胁情报服务用「按配置签名复用的单例」：REST、MCP 工具、定时任务共用
+	// 同一个实例，节流器才不会被复制成多份（否则 VT 的 4 次/分钟会被放大）。
+	// 这里先构造一次，确保启动阶段就把源注册进库。
+	currentThreatIntelService(db, log.Logger)
+	threatIntelHandler := handler.NewThreatIntelHandler(db, func() *threatintel.Service {
+		return currentThreatIntelService(db, log.Logger)
+	}, log.Logger)
+
+	// 威胁情报订阅源的定时同步。
+	// 互斥已经下沉到 threatintel 包的 feedSyncMu，与 REST / MCP 工具共用同一把锁；
+	// 这里拿不到锁会直接跳过这一轮。
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		// 首次等满一个同步间隔再跑：重启后不立刻拉一轮全量。
+		last := time.Now()
+		for range ticker.C {
+			current := threatIntelCfgSnapshot()
+			if !current.Enabled {
+				continue
+			}
+			if time.Since(last) < current.ThreatIntelFeedInterval() {
+				continue
+			}
+			// 同步互斥已经下沉到 threatintel 包（SyncFeed/SyncAllFeeds 自己加锁），
+			// 这里不再单独持锁，避免与包内锁形成两套。
+			svc := currentThreatIntelService(db, log.Logger)
+			runCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			results, errs, started := svc.SyncAllFeeds(runCtx)
+			cancel()
+			if !started {
+				// 已有同步在跑：这是"这一轮跳过"，不是失败，也不能推进 last，
+				// 否则会把下一次尝试白白推迟一整个间隔。
+				continue
+			}
+			last = time.Now()
+			if cacheN, feedN, merr := svc.Maintain(context.Background()); merr != nil {
+				log.Logger.Warn("威胁情报例行清理失败", zap.Error(merr))
+			} else if cacheN > 0 || feedN > 0 {
+				log.Logger.Info("威胁情报例行清理完成", zap.Int64("cache", cacheN), zap.Int64("feed", feedN))
+			}
+			if len(errs) > 0 {
+				log.Logger.Warn("威胁情报订阅同步部分失败", zap.Strings("errors", errs), zap.Any("synced", results))
+			} else if len(results) > 0 {
+				log.Logger.Info("威胁情报订阅同步完成", zap.Any("synced", results))
+			}
+		}
+	}()
 	configHandler.SetDB(db)
 	configHandler.SetToolGuard(toolGuard)
 	configHandler.SetAudit(auditSvc)
@@ -622,10 +674,11 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		registerAssetTools(mcpServer, db, log.Logger)
 		registerVisionTools(mcpServer, cfg, log.Logger)
 		registerHostTools(mcpServer, db, hostSecretBox, log.Logger)
-	registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
-	registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
-	registerMemoryTools(mcpServer, db, log.Logger)
-	registerVulnIntelTools(mcpServer, db, hostSecretBox, cfg, log.Logger)
+		registerDetectTools(mcpServer, db, hostSecretBox, log.Logger)
+		registerIOCTools(mcpServer, db, hostSecretBox, log.Logger)
+		registerThreatIntelTools(mcpServer, db, log.Logger)
+		registerMemoryTools(mcpServer, db, log.Logger)
+		registerVulnIntelTools(mcpServer, db, hostSecretBox, cfg, log.Logger)
 		return nil
 	}
 	configHandler.SetVulnerabilityToolRegistrar(vulnerabilityRegistrar)
@@ -720,6 +773,7 @@ func New(cfg *config.Config, log *logger.Logger, configPath string) (*App, error
 		authManager,
 		openAPIHandler,
 		updateHandler,
+		threatIntelHandler,
 	)
 
 	return app, nil
@@ -1021,6 +1075,7 @@ func setupRoutes(
 	authManager *security.AuthManager,
 	openAPIHandler *handler.OpenAPIHandler,
 	updateHandler *handler.UpdateHandler,
+	threatIntelHandler *handler.ThreatIntelHandler,
 ) {
 	// API路由
 	api := router.Group("/api")
@@ -1171,6 +1226,14 @@ func setupRoutes(
 		protected.GET("/vuln-intel/detail/:cve", hostHandler.GetVulnIntel)
 		protected.POST("/vuln-intel/sync", hostHandler.SyncVulnIntel)
 		protected.POST("/vuln-intel/import", hostHandler.ImportVulnIntel)
+
+		// 威胁情报（与 IOC 情报、漏洞情报并列的独立模块）
+		protected.GET("/threat-intel/sources", threatIntelHandler.ListSources)
+		protected.GET("/threat-intel/query", threatIntelHandler.Query)
+		protected.GET("/threat-intel/feed", threatIntelHandler.ListFeed)
+		protected.POST("/threat-intel/feed/sync", security.RequirePermission("threatintel:write"), threatIntelHandler.SyncFeed)
+		// 采纳是唯一能写 IOC 表的入口，两个权限都要。
+		protected.POST("/threat-intel/adopt", security.RequirePermission("threatintel:write"), threatIntelHandler.AdoptIOC)
 
 		// 批量任务管理
 		protected.POST("/batch-tasks", agentHandler.CreateBatchQueue)
@@ -1426,7 +1489,6 @@ func setupRoutes(
 		protected.PUT("/vulnerabilities/:id", vulnerabilityHandler.UpdateVulnerability)
 		protected.DELETE("/vulnerabilities/:id", vulnerabilityHandler.DeleteVulnerability)
 
-
 		// 对话附件（chat_uploads）管理
 		protected.GET("/chat-uploads", chatUploadsHandler.List)
 		protected.GET("/chat-uploads/export", chatUploadsHandler.Export)
@@ -1518,8 +1580,6 @@ func setupRoutes(
 		c.HTML(http.StatusOK, "index.html", gin.H{"Version": version})
 	})
 }
-
-
 
 // initializeKnowledge 初始化知识库组件（用于动态初始化）
 func initializeKnowledge(

@@ -114,7 +114,7 @@ func mcpToolAuthorizer(db *database.DB) func(context.Context, string, map[string
 			}
 			return nil
 		case builtin.ToolHostList, builtin.ToolHostGet, builtin.ToolHostProbe, builtin.ToolHostInspect,
-		builtin.ToolHostLogScan, builtin.ToolHostBaselineAudit:
+			builtin.ToolHostLogScan, builtin.ToolHostBaselineAudit:
 			return require("host:read")
 		case builtin.ToolVulnIntelSearch, builtin.ToolVulnIntelGet, builtin.ToolVulnIntelMatchHost:
 			return require("intel:read")
@@ -134,6 +134,10 @@ func mcpToolAuthorizer(db *database.DB) func(context.Context, string, map[string
 			// 封禁是情报库的写操作，由 ioc:write 把关；工具内部还会要求 host:exec，
 			// 两道各自覆盖"能不能改情报"和"能不能在该主机上执行"。
 			return require("ioc:write")
+		case builtin.ToolThreatIntelQuery, builtin.ToolThreatIntelSources, builtin.ToolThreatIntelFeed:
+			return require("threatintel:read")
+		case builtin.ToolThreatIntelSync:
+			return require("threatintel:write")
 		case builtin.ToolHostExec, builtin.ToolHostUpload, builtin.ToolHostDownload:
 			return require("host:exec")
 		case builtin.ToolDeleteAsset:

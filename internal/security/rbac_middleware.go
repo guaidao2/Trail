@@ -181,6 +181,15 @@ func permissionForRequest(method, fullPath string) string {
 			return "ioc:write"
 		}
 		return "ioc:read"
+	case strings.HasPrefix(path, "/threat-intel"):
+		// 威胁情报是独立模块，权限点与 ioc:*/intel:* 都不共用。
+		// 注意 GET 查询本身也会打外部源、消耗配额，所以 threatintel:read
+		// 并不是"纯看本地数据"的权限，分配时要意识到这一点。
+		// 写侧（同步订阅源、采纳进 IOC）走 threatintel:write。
+		if method != "GET" {
+			return "threatintel:write"
+		}
+		return "threatintel:read"
 	case strings.HasPrefix(path, "/wall"):
 		// 攻防态势大屏是只读展示，聚合的正是主机维度数据，因此跟随 host:read。
 		return "host:read"

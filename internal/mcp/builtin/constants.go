@@ -18,14 +18,14 @@ const (
 	ToolCompleteAssetScan = "complete_asset_scan"
 
 	// 主机纳管工具（SSH / Telnet 远程运维）
-	ToolHostList     = "host_list"
-	ToolHostGet      = "host_get"
-	ToolHostProbe    = "host_probe"
-	ToolHostExec     = "host_exec"
-	ToolHostUpload   = "host_upload"
-	ToolHostDownload = "host_download"
-	ToolHostInspect  = "host_inspect"
-	ToolHostLogScan  = "host_log_scan"
+	ToolHostList          = "host_list"
+	ToolHostGet           = "host_get"
+	ToolHostProbe         = "host_probe"
+	ToolHostExec          = "host_exec"
+	ToolHostUpload        = "host_upload"
+	ToolHostDownload      = "host_download"
+	ToolHostInspect       = "host_inspect"
+	ToolHostLogScan       = "host_log_scan"
 	ToolHostBaselineAudit = "host_baseline_audit"
 
 	// IOC 情报库工具
@@ -35,6 +35,12 @@ const (
 	ToolIOCRecordHit = "ioc_record_hit"
 	ToolIOCBlock     = "ioc_block"
 	ToolIOCUnblock   = "ioc_unblock"
+
+	// 威胁情报（外部源的观测事实，与 IOC 库「我研判出的结论」不同）
+	ToolThreatIntelQuery   = "threat_intel_query"
+	ToolThreatIntelSources = "threat_intel_sources"
+	ToolThreatIntelFeed    = "threat_intel_feed"
+	ToolThreatIntelSync    = "threat_intel_sync"
 
 	// 记忆工具（关键 / 长期 / 短期三级）
 	ToolMemorySave   = "memory_save"
@@ -99,6 +105,10 @@ func IsBuiltinTool(toolName string) bool {
 		ToolIOCRecordHit,
 		ToolIOCBlock,
 		ToolIOCUnblock,
+		ToolThreatIntelQuery,
+		ToolThreatIntelSources,
+		ToolThreatIntelFeed,
+		ToolThreatIntelSync,
 		ToolMemorySave,
 		ToolMemorySearch,
 		ToolMemoryList,

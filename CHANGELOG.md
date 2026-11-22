@@ -1,3 +1,51 @@
+## v1.4.0 — 2026-11-22
+
+### Added
+
+- 「威胁情报」作为独立模块上线，与「IOC 情报」「漏洞情报」三者平级、数据分离：
+  威胁情报是外部源的观测事实（只读、带 TTL、永不自动封禁），IOC 是人研判出的结论（状态机、可封禁）。
+  两者之间只留一个显式动作「采纳为 IOC」。
+- 查询式情报源：Shodan InternetDB（暴露面：端口/CPE/已知漏洞）、GreyNoise community（扫描器降噪）、
+  AlienVault OTX（社区 pulse），三者均免 Key 可用；AbuseIPDB 与 VirusTotal 需客户自备 Key，
+  未配置时跳过并计入 `skipped`，不计为失败。
+- 订阅式情报源：Spamhaus DROP（失陷网段）、Feodo Tracker（C2 IP）免 Key；
+  URLhaus（恶意 URL）、ThreatFox（IOC 共享库）需 abuse.ch Auth-Key。支持定时同步与手动触发。
+- 三层数据表：`threat_intel_source`（源注册与健康度/配额）、`threat_intel_cache`（查询缓存含负缓存）、
+  `threat_intel_feed`（订阅条目），见 `schemas/application.sql`。
+- 按源节流（`rate_limit_per_minute`）与日配额（`daily_quota`），免费档默认值来自各源自身声明，
+  避免一个批量任务打光配额。
+- 「威胁情报」页面：源健康带、单指标聚合查询（信誉判定与暴露面分栏）、订阅条目浏览与筛选、同步与采纳入口。
+- 「威胁情报」配置可视化：系统设置页新增区块，可改启用开关、出口代理、单请求超时、订阅同步间隔、
+  条目保留天数、查询缓存时长、四个源的 API Key，以及九个源的停用勾选；保存写回 `config.yaml`。
+  Key 在配置接口里统一掩码，回填的是 `********`，不改动即不覆盖；
+  保存后写回 `config.yaml`，重启仍生效。
+  早期 `threat_intel.keys: {abuseipdb: ...}` 的 map 写法会自动迁移到新字段，固定字段优先；
+  保存时会把旧 `keys` 节点删掉，显式写空的固定字段不会被旧值「复活」。
+- 新增权限点 `threatintel:read` / `threatintel:write`；采纳动作额外要求 `ioc:write`。
+- 四个 MCP 工具：`threat_intel_query` / `threat_intel_sources` / `threat_intel_feed` / `threat_intel_sync`。
+
+### Fixed
+
+- 威胁情报的时间字段统一按 UTC 字符串落库与比较，修复本地时区（东八区）导致 24 小时配额窗口
+  与缓存过期判定整体偏移 8 小时的问题。
+- 配额扣减改为单条 UPDATE 完成判断与自增，避免并发查询各自读旧值后同时放行。
+- MCP 工具此前在配置快照注入之前构造服务，读到的是零配置：`config.yaml` 里的 Key、代理、
+  镜像地址对四个威胁情报工具全部无效。改为按配置签名复用的单例，REST / MCP / 定时任务共用同一实例，
+  同时避免每个入口各建一份节流器导致限速被放大。
+- 订阅同步的互斥此前只覆盖定时任务，REST 与 MCP 可并发「整源替换」互相覆盖。互斥下沉到
+  `internal/threatintel`，三个入口共用；拿不到锁的请求返回 409 而不是排队阻塞。
+- 订阅条目改为单事务整源替换：此前先删后写分两次提交，写失败会把整个源清空；空结果集也不再删旧数据。
+- abuse.ch 的 Auth-Key 会随 HTTP 错误信息（`*url.Error` 带完整 URL）进入 `last_error`、日志与接口响应。
+  错误信息改为只保留 `scheme://host`，请求构造失败与网络失败两条路径都覆盖。
+- ThreatFox 的 `ip:port` 未剥端口、URLhaus 的 URL 未小写归一，导致订阅 entries 与按指标反查/查询侧对不上。
+- 缓存命中时丢失标签（CPE、`eol-product` 等）与负缓存摘要自相矛盾：缓存表新增 `tags` 列并落库还原，
+  `verdict=unknown` 走「无记录」文案。
+- `disabled_sources`、`cache_ttl_seconds` 此前只写进配置结构体没有消费方；现在分别控制源启停与缓存 TTL，
+  且配置是唯一权威——从停用名单移除即可恢复，不会被库里的旧值卡住。
+- 采纳为 IOC 会覆盖人工维护的置信度、严重度与备注；现在已存在的条目只补备注线索，保留人工字段。
+- 页面的 hash 类型筛选在入库保留具体算法（md5/sha1/sha256）后失效，`type=hash` 现展开为三种算法查询。
+- 订阅列表分页换成与 IOC / 漏洞情报 / 记忆页相同的公共组件（首页/上一页/页码/下一页/末页 + 每页条数）。
+
 
 ## v1.3.0 — 2026-11-21
 

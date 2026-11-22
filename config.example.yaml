@@ -11,7 +11,7 @@
 
 # 前端显示的版本号（可选，不填则显示默认版本）。一键更新完成后，会用新代码里这个文件的值
 # 同步更新你的 config.yaml 的 version 字段（页头版本号与静态资源缓存随代码走）。
-version: "v1.3.0"
+version: "v1.4.0"
 # 服务器配置
 server:
   host: 0.0.0.0 # 监听地址，0.0.0.0 表示监听所有网络接口
@@ -625,3 +625,38 @@ roles_dir: roles # 角色配置文件目录（相对于配置文件所在目录�
 #   epss: true
 #   ghsa: true
 #   poc: false
+
+# ============================================
+# 威胁情报（可选）
+# ============================================
+# 拿 IP / 域名 / URL / 哈希去外部源查"别人观测到什么"：暴露端口、已知漏洞、
+# 恶意判定、扫描器分类、订阅 feed 里的 C2 与恶意 URL。
+# 与「IOC 情报」（我们自己研判出的结论、带状态机、可封禁）是两回事：
+# 外部观测只是证据，要落成 IOC 必须在页面上点「采纳为 IOC」。
+#
+# 不写这一段也能用：internetdb / greynoise / otx / spamhaus_drop / feodo
+# 这五个源不需要任何 Key，页面和工具直接可用。
+# threat_intel:
+#   # 只影响订阅源（urlhaus / threatfox / spamhaus / feodo）的定时同步；
+#   # 查询式源是点一次查一次，不受这个开关影响。
+#   enabled: true
+#   proxy: http://127.0.0.1:7890
+#   timeout: 30s
+#   # 订阅源自动同步间隔与条目保留天数
+#   feed_sync_interval: 6h
+#   feed_ttl_days: 90
+#   # 查询结果缓存时长（秒）。源自己会给过期时间，这里只是兜底；
+#   # 同时作为源的默认 ttl_seconds 写进库，改了会对所有源重新生效。
+#   cache_ttl_seconds: 3600
+#   # 按源配置 Key。没配的源会在查询结果里标「未配置 Key」并跳过，不算失败。
+#   # abuse.ch 的 Auth-Key 在 https://auth.abuse.ch/ 免费注册，
+#   # 同一把 Key 可用于 urlhaus 与 threatfox。
+#   # 这几个字段在配置接口里会被统一掩码成 ********，填新值才会覆盖。
+#   abuseipdb_key: ""
+#   virustotal_key: ""
+#   urlhaus_key: ""
+#   threatfox_key: ""
+#   # 入口覆盖（内网镜像或测试用），留空走官方地址
+#   endpoints: {}
+#   # 显式停用某个源；不写表示全部启用
+#   disabled_sources: []

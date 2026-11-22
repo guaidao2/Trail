@@ -785,3 +785,75 @@ CREATE TABLE vuln_intel_sync (
     last_error TEXT NOT NULL DEFAULT '',
     enabled INTEGER NOT NULL DEFAULT 1
 );
+
+-- ============================================================================
+-- 威胁情报（threat intel）
+--
+-- 与 IOC 的根本区别：IOC 是「我研判出的结论」，带状态机、可封禁；
+-- 威胁情报是「外部源观测到的事实」，只读、只当证据，永不自动封禁。
+-- 两者之间只留一个显式动作：采纳（把外部观测写成一条 observed IOC）。
+-- ============================================================================
+
+-- 源注册与健康度。mode 区分查询式（lookup）与订阅式（feed），两条链路
+-- 的调度、配额、落地表都不同，不能混用一个 provider。
+-- 密钥不落这张表，只记录 requires_key，实际 key 走配置/环境变量。
+CREATE TABLE threat_intel_source (
+    source TEXT PRIMARY KEY,
+    mode TEXT NOT NULL DEFAULT 'lookup',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    requires_key INTEGER NOT NULL DEFAULT 0,
+    endpoint TEXT NOT NULL DEFAULT '',
+    ttl_seconds INTEGER NOT NULL DEFAULT 3600,
+    rate_limit_per_minute INTEGER NOT NULL DEFAULT 0,
+    daily_quota INTEGER NOT NULL DEFAULT 0,
+    quota_used INTEGER NOT NULL DEFAULT 0,
+    quota_reset_at DATETIME,
+    last_ok_at DATETIME,
+    last_error TEXT NOT NULL DEFAULT '',
+    updated_at DATETIME NOT NULL
+);
+
+-- 查询式结果缓存。negative cache 与正样本同表：查过但没情报也要落一行
+-- （verdict=unknown），否则同一个指标会被反复打到源上，配额很快见底。
+-- category 区分两类情报，别把「开了 80 端口」当成「这个 IP 恶意」：
+--   reputation —— 信誉/恶意判定（GreyNoise / AbuseIPDB / VT / ThreatFox）
+--   exposure   —— 暴露面观测（Shodan InternetDB：端口、CPE、已知漏洞、标签）
+CREATE TABLE threat_intel_cache (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    indicator_type TEXT NOT NULL,
+    normalized TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'reputation',
+    verdict TEXT NOT NULL DEFAULT 'unknown',
+    -- tags 存 JSON 数组：缓存命中时要从这里还原标签，否则第二次查询
+    -- 会把 CPE / eol-product 这类标签整块丢掉。
+    tags TEXT NOT NULL DEFAULT '[]',
+    payload TEXT NOT NULL DEFAULT '',
+    http_status INTEGER NOT NULL DEFAULT 0,
+    fetched_at DATETIME NOT NULL,
+    expires_at DATETIME
+);
+CREATE UNIQUE INDEX idx_threat_intel_cache_key ON threat_intel_cache(source, indicator_type, normalized);
+CREATE INDEX idx_threat_intel_cache_indicator ON threat_intel_cache(indicator_type, normalized);
+CREATE INDEX idx_threat_intel_cache_expires ON threat_intel_cache(expires_at);
+
+-- 订阅式 feed 落地。与 cache 分开：feed 是按源定期覆盖的全量集合，
+-- cache 是单次按需查询结果，混表会让"这条是不是我主动查的"变成猜谜。
+CREATE TABLE threat_intel_feed (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    indicator_type TEXT NOT NULL,
+    normalized TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT '',
+    malware TEXT NOT NULL DEFAULT '',
+    confidence INTEGER NOT NULL DEFAULT 50,
+    first_seen DATETIME,
+    last_seen DATETIME,
+    tags TEXT NOT NULL DEFAULT '',
+    payload TEXT NOT NULL DEFAULT '',
+    fetched_at DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX idx_threat_intel_feed_unique ON threat_intel_feed(source, indicator_type, normalized);
+CREATE INDEX idx_threat_intel_feed_type ON threat_intel_feed(indicator_type);
+CREATE INDEX idx_threat_intel_feed_category ON threat_intel_feed(category);
+CREATE INDEX idx_threat_intel_feed_source ON threat_intel_feed(source);

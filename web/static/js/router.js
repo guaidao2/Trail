@@ -496,6 +496,11 @@ async function initPage(pageId) {
                 initIOCPage();
             }
             break;
+        case 'threat-intel':
+            if (typeof initThreatIntelPage === 'function') {
+                initThreatIntelPage();
+            }
+            break;
         case 'memory':
             if (typeof initMemoryPage === 'function') {
                 initMemoryPage();

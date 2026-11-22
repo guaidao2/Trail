@@ -222,21 +222,22 @@ func (h *ConfigHandler) ApplyWechatRobotBinding(wc config.RobotWechatConfig) err
 
 // GetConfigResponse 获取配置响应
 type GetConfigResponse struct {
-	AI         config.AIConfig          `json:"ai"`
-	OpenAI     config.OpenAIConfig      `json:"openai"`
-	Vision     config.VisionConfig      `json:"vision"`
-	FOFA       config.FofaConfig        `json:"fofa"`
-	ZoomEye    config.SpaceSearchConfig `json:"zoomeye"`
-	Quake      config.SpaceSearchConfig `json:"quake"`
-	Shodan     config.SpaceSearchConfig `json:"shodan"`
-	MCP        config.MCPConfig         `json:"mcp"`
-	Tools      []ToolConfigInfo         `json:"tools"`
-	Agent      config.AgentConfig       `json:"agent"`
-	Hitl       config.HitlConfig        `json:"hitl,omitempty"`
-	Knowledge  config.KnowledgeConfig   `json:"knowledge"`
-	Robots     config.RobotsConfig      `json:"robots,omitempty"`
-	MultiAgent config.MultiAgentPublic  `json:"multi_agent,omitempty"`
-	VulnIntel  *config.VulnIntelConfig  `json:"vuln_intel,omitempty"`
+	AI          config.AIConfig           `json:"ai"`
+	OpenAI      config.OpenAIConfig       `json:"openai"`
+	Vision      config.VisionConfig       `json:"vision"`
+	FOFA        config.FofaConfig         `json:"fofa"`
+	ZoomEye     config.SpaceSearchConfig  `json:"zoomeye"`
+	Quake       config.SpaceSearchConfig  `json:"quake"`
+	Shodan      config.SpaceSearchConfig  `json:"shodan"`
+	MCP         config.MCPConfig          `json:"mcp"`
+	Tools       []ToolConfigInfo          `json:"tools"`
+	Agent       config.AgentConfig        `json:"agent"`
+	Hitl        config.HitlConfig         `json:"hitl,omitempty"`
+	Knowledge   config.KnowledgeConfig    `json:"knowledge"`
+	Robots      config.RobotsConfig       `json:"robots,omitempty"`
+	MultiAgent  config.MultiAgentPublic   `json:"multi_agent,omitempty"`
+	VulnIntel   *config.VulnIntelConfig   `json:"vuln_intel,omitempty"`
+	ThreatIntel *config.ThreatIntelConfig `json:"threat_intel,omitempty"`
 }
 
 // ToolConfigInfo 工具配置信息
@@ -257,6 +258,16 @@ func (h *ConfigHandler) VulnIntelSnapshot() config.VulnIntelConfig {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.config.VulnIntel
+}
+
+// ThreatIntelSnapshot 在锁保护下取一份威胁情报配置。
+//
+// 注意 Keys / Endpoints 是 map，复制的是 map 头而非内容；调用方只读不写。
+// threatintel.NewService 会再复制一份，避免后续配置更新时与读取方竞争。
+func (h *ConfigHandler) ThreatIntelSnapshot() config.ThreatIntelConfig {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.config.ThreatIntel
 }
 
 func (h *ConfigHandler) GetConfig(c *gin.Context) {
@@ -355,6 +366,21 @@ func (h *ConfigHandler) GetConfig(c *gin.Context) {
 		Robots:     h.config.Robots,
 		MultiAgent: multiPub,
 		VulnIntel:  &h.config.VulnIntel,
+		ThreatIntel: func() *config.ThreatIntelConfig {
+			// 复制一份再返回：Endpoints 是 map，DisabledSources 是切片，
+			// 直接交出原对象会让序列化与并发写入撞在一起。密钥字段是普通字符串，
+			// 由 maskedConfigResponse 统一掩码。
+			c := h.config.ThreatIntel
+			if c.Endpoints != nil {
+				eps := make(map[string]string, len(c.Endpoints))
+				for k, v := range c.Endpoints {
+					eps[k] = v
+				}
+				c.Endpoints = eps
+			}
+			c.DisabledSources = append([]string(nil), c.DisabledSources...)
+			return &c
+		}(),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "配置序列化失败"})
@@ -689,22 +715,39 @@ func (h *ConfigHandler) GetTools(c *gin.Context) {
 
 // UpdateConfigRequest 更新配置请求
 type UpdateConfigRequest struct {
-	AI         *config.AIConfig            `json:"ai,omitempty"`
-	OpenAI     *config.OpenAIConfig        `json:"openai,omitempty"`
-	Vision     *config.VisionConfig        `json:"vision,omitempty"`
-	FOFA       *config.FofaConfig          `json:"fofa,omitempty"`
-	ZoomEye    *config.SpaceSearchConfig   `json:"zoomeye,omitempty"`
-	Quake      *config.SpaceSearchConfig   `json:"quake,omitempty"`
-	Shodan     *config.SpaceSearchConfig   `json:"shodan,omitempty"`
-	MCP        *config.MCPConfig           `json:"mcp,omitempty"`
-	Tools      []ToolEnableStatus          `json:"tools,omitempty"`
-	Agent      *AgentConfigUpdate          `json:"agent,omitempty"`
-	Hitl       *config.HitlConfig          `json:"hitl,omitempty"`
-	Knowledge  *config.KnowledgeConfig     `json:"knowledge,omitempty"`
-	Robots     *config.RobotsConfig        `json:"robots,omitempty"`
-	MultiAgent *config.MultiAgentAPIUpdate `json:"multi_agent,omitempty"`
-	Storage    *config.StorageConfig       `json:"storage,omitempty"`
-	VulnIntel  *VulnIntelConfigUpdate      `json:"vuln_intel,omitempty"`
+	AI          *config.AIConfig            `json:"ai,omitempty"`
+	OpenAI      *config.OpenAIConfig        `json:"openai,omitempty"`
+	Vision      *config.VisionConfig        `json:"vision,omitempty"`
+	FOFA        *config.FofaConfig          `json:"fofa,omitempty"`
+	ZoomEye     *config.SpaceSearchConfig   `json:"zoomeye,omitempty"`
+	Quake       *config.SpaceSearchConfig   `json:"quake,omitempty"`
+	Shodan      *config.SpaceSearchConfig   `json:"shodan,omitempty"`
+	MCP         *config.MCPConfig           `json:"mcp,omitempty"`
+	Tools       []ToolEnableStatus          `json:"tools,omitempty"`
+	Agent       *AgentConfigUpdate          `json:"agent,omitempty"`
+	Hitl        *config.HitlConfig          `json:"hitl,omitempty"`
+	Knowledge   *config.KnowledgeConfig     `json:"knowledge,omitempty"`
+	Robots      *config.RobotsConfig        `json:"robots,omitempty"`
+	MultiAgent  *config.MultiAgentAPIUpdate `json:"multi_agent,omitempty"`
+	Storage     *config.StorageConfig       `json:"storage,omitempty"`
+	VulnIntel   *VulnIntelConfigUpdate      `json:"vuln_intel,omitempty"`
+	ThreatIntel *ThreatIntelConfigUpdate    `json:"threat_intel,omitempty"`
+}
+
+// ThreatIntelConfigUpdate 只覆盖 JSON 中出现的字段（指针非 nil），
+// 这样"只改代理"不会把已保存的 Key 清空——前端回填时 Key 是掩码值。
+type ThreatIntelConfigUpdate struct {
+	Enabled          *bool     `json:"enabled,omitempty"`
+	Proxy            *string   `json:"proxy,omitempty"`
+	Timeout          *string   `json:"timeout,omitempty"`
+	FeedSyncInterval *string   `json:"feed_sync_interval,omitempty"`
+	FeedTTLDays      *int      `json:"feed_ttl_days,omitempty"`
+	CacheTTLSeconds  *int      `json:"cache_ttl_seconds,omitempty"`
+	AbuseIPDBKey     *string   `json:"abuseipdb_key,omitempty"`
+	VirusTotalKey    *string   `json:"virustotal_key,omitempty"`
+	URLhausKey       *string   `json:"urlhaus_key,omitempty"`
+	ThreatFoxKey     *string   `json:"threatfox_key,omitempty"`
+	DisabledSources  *[]string `json:"disabled_sources,omitempty"`
 }
 
 // VulnIntelConfigUpdate 只覆盖 JSON 中出现的字段（指针非 nil），
@@ -817,6 +860,47 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		)
 	}
 
+	if req.ThreatIntel != nil {
+		// 与漏洞情报一样按字段合并：前端回填的 Key 是掩码，只在用户填了新值时覆盖。
+		ti := &h.config.ThreatIntel
+		if req.ThreatIntel.Enabled != nil {
+			ti.Enabled = *req.ThreatIntel.Enabled
+		}
+		if req.ThreatIntel.Proxy != nil {
+			ti.Proxy = *req.ThreatIntel.Proxy
+		}
+		if req.ThreatIntel.Timeout != nil {
+			ti.Timeout = *req.ThreatIntel.Timeout
+		}
+		if req.ThreatIntel.FeedSyncInterval != nil {
+			ti.FeedSyncInterval = *req.ThreatIntel.FeedSyncInterval
+		}
+		if req.ThreatIntel.FeedTTLDays != nil {
+			ti.FeedTTLDays = *req.ThreatIntel.FeedTTLDays
+		}
+		if req.ThreatIntel.CacheTTLSeconds != nil {
+			ti.CacheTTLSeconds = *req.ThreatIntel.CacheTTLSeconds
+		}
+		if req.ThreatIntel.AbuseIPDBKey != nil {
+			ti.AbuseIPDBKey = *req.ThreatIntel.AbuseIPDBKey
+		}
+		if req.ThreatIntel.VirusTotalKey != nil {
+			ti.VirusTotalKey = *req.ThreatIntel.VirusTotalKey
+		}
+		if req.ThreatIntel.URLhausKey != nil {
+			ti.URLhausKey = *req.ThreatIntel.URLhausKey
+		}
+		if req.ThreatIntel.ThreatFoxKey != nil {
+			ti.ThreatFoxKey = *req.ThreatIntel.ThreatFoxKey
+		}
+		if req.ThreatIntel.DisabledSources != nil {
+			// 前端每次都提交完整的勾选状态，这里整体替换而不是合并。
+			ti.DisabledSources = append([]string(nil), (*req.ThreatIntel.DisabledSources)...)
+		}
+		h.logger.Info("更新威胁情报配置",
+			zap.Bool("enabled", ti.Enabled),
+			zap.Int("disabled_sources", len(ti.DisabledSources)))
+	}
 	if req.VulnIntel != nil {
 		// 按字段合并：未提交的字段保持原值（避免"只改代理"把 token 清空）。
 		vi := &h.config.VulnIntel
@@ -1954,6 +2038,7 @@ func (h *ConfigHandler) saveConfig() error {
 	updateHitlConfig(root, h.config.Hitl)
 	updateStorageConfig(root, h.config.Storage)
 	updateVulnIntelConfig(root, h.config.VulnIntel)
+	updateThreatIntelConfig(root, h.config.ThreatIntel)
 	updateMultiAgentConfig(root, h.config.MultiAgent)
 	// 更新外部MCP配置（使用external_mcp.go中的函数，同一包中可直接调用）
 	updateExternalMCPConfig(root, h.config.ExternalMCP)
@@ -2351,7 +2436,30 @@ func updateHitlConfig(doc *yaml.Node, cfg config.HitlConfig) {
 	setStringInMap(hitlNode, "audit_agent_prompt_review_edit", cfg.AuditAgentPromptReviewEdit)
 }
 
-// updateVulnIntelConfig 把漏洞情报配置写回 config.yaml，保留文件其余内容与注释。
+// updateThreatIntelConfig 把威胁情报配置写回 config.yaml，保留文件其余内容与注释。
+//
+// 少了这一段，设置页保存只在内存里生效，重启就回到旧值——而且不会有任何报错。
+// endpoints 不在页面上编辑，这里不碰它，原节点会原样保留。
+func updateThreatIntelConfig(doc *yaml.Node, cfg config.ThreatIntelConfig) {
+	root := doc.Content[0]
+	node := ensureMap(root, "threat_intel")
+	setBoolInMap(node, "enabled", cfg.Enabled)
+	setStringInMap(node, "proxy", cfg.Proxy)
+	setStringInMap(node, "timeout", cfg.Timeout)
+	setStringInMap(node, "feed_sync_interval", cfg.FeedSyncInterval)
+	setIntInMap(node, "feed_ttl_days", cfg.FeedTTLDays)
+	setIntInMap(node, "cache_ttl_seconds", cfg.CacheTTLSeconds)
+	setStringInMap(node, "abuseipdb_key", cfg.AbuseIPDBKey)
+	setStringInMap(node, "virustotal_key", cfg.VirusTotalKey)
+	setStringInMap(node, "urlhaus_key", cfg.URLhausKey)
+	setStringInMap(node, "threatfox_key", cfg.ThreatFoxKey)
+	setStringSliceInMap(node, "disabled_sources", cfg.DisabledSources)
+	// 清掉旧版本的 keys map：迁移之后它已经没用了，留着会让
+	// UnmarshalYAML 的兼容逻辑把用户刚清空的 Key 又填回去。
+	removeKeyFromMap(node, "keys")
+}
+
+// updateVulnIntelConfig 把漏洞情报同步配置写回 config.yaml，保留文件其余内容与注释。
 func updateVulnIntelConfig(doc *yaml.Node, cfg config.VulnIntelConfig) {
 	root := doc.Content[0]
 	node := ensureMap(root, "vuln_intel")

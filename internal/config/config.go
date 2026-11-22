@@ -52,6 +52,7 @@ type Config struct {
 	Vision      VisionConfig          `yaml:"vision,omitempty" json:"vision,omitempty"`
 	Update      UpdateConfig          `yaml:"update,omitempty" json:"update,omitempty"`
 	VulnIntel   VulnIntelConfig       `yaml:"vuln_intel,omitempty" json:"vuln_intel,omitempty"`
+	ThreatIntel ThreatIntelConfig     `yaml:"threat_intel,omitempty" json:"threat_intel,omitempty"`
 }
 
 // VulnIntelConfig 是漏洞情报在线同步配置。
@@ -61,17 +62,17 @@ type Config struct {
 // 只有 enabled=true 才会启动同步；EPSS/GHSA/PoC 各自可单独关闭。
 type VulnIntelConfig struct {
 	Enabled      bool   `yaml:"enabled,omitempty" json:"enabled,omitempty"`
-	NVDAPIKey    string `yaml:"nvd_api_key,omitempty" json:"nvd_api_key,omitempty"`       // 可选，匿名 5 次/30s
-	GitHubToken  string `yaml:"github_token,omitempty" json:"github_token,omitempty"`     // 可选，GHSA/PoC 提速
-	Proxy        string `yaml:"proxy,omitempty" json:"proxy,omitempty"`                   // 出口代理（内网部署常用）
-	BackfillDays int    `yaml:"backfill_days,omitempty" json:"backfill_days,omitempty"`   // 首跑回看天数，0=从 1988 年回填
-	SyncInterval string `yaml:"sync_interval,omitempty" json:"sync_interval,omitempty"`   // 默认 24h
-	MaxRuntime   string `yaml:"max_runtime,omitempty" json:"max_runtime,omitempty"`       // 单轮上限，默认 30m
-	EPSS         *bool  `yaml:"epss,omitempty" json:"epss,omitempty"`                     // 默认开启
-	GHSA         *bool  `yaml:"ghsa,omitempty" json:"ghsa,omitempty"`                     // 默认开启
-	POC          *bool  `yaml:"poc,omitempty" json:"poc,omitempty"`                       // 默认关闭
-	OSV          *bool  `yaml:"osv,omitempty" json:"osv,omitempty"`                       // 默认开启：语言生态全量
-	OSVBaseURL   string `yaml:"osv_base_url,omitempty" json:"osv_base_url,omitempty"`     // 转储地址，可指向内网镜像
+	NVDAPIKey    string `yaml:"nvd_api_key,omitempty" json:"nvd_api_key,omitempty"`     // 可选，匿名 5 次/30s
+	GitHubToken  string `yaml:"github_token,omitempty" json:"github_token,omitempty"`   // 可选，GHSA/PoC 提速
+	Proxy        string `yaml:"proxy,omitempty" json:"proxy,omitempty"`                 // 出口代理（内网部署常用）
+	BackfillDays int    `yaml:"backfill_days,omitempty" json:"backfill_days,omitempty"` // 首跑回看天数，0=从 1988 年回填
+	SyncInterval string `yaml:"sync_interval,omitempty" json:"sync_interval,omitempty"` // 默认 24h
+	MaxRuntime   string `yaml:"max_runtime,omitempty" json:"max_runtime,omitempty"`     // 单轮上限，默认 30m
+	EPSS         *bool  `yaml:"epss,omitempty" json:"epss,omitempty"`                   // 默认开启
+	GHSA         *bool  `yaml:"ghsa,omitempty" json:"ghsa,omitempty"`                   // 默认开启
+	POC          *bool  `yaml:"poc,omitempty" json:"poc,omitempty"`                     // 默认关闭
+	OSV          *bool  `yaml:"osv,omitempty" json:"osv,omitempty"`                     // 默认开启：语言生态全量
+	OSVBaseURL   string `yaml:"osv_base_url,omitempty" json:"osv_base_url,omitempty"`   // 转储地址，可指向内网镜像
 }
 
 // VulnIntelEPSSOn / GHSAOn / POCon 把三态开关折叠成布尔（nil 取默认）。
@@ -100,6 +101,132 @@ func (v VulnIntelConfig) VulnIntelMaxRuntime() time.Duration {
 		return d
 	}
 	return 30 * time.Minute
+}
+
+// ThreatIntelConfig 是「威胁情报」模块配置。
+//
+// 与 VulnIntelConfig（漏洞情报）是两套东西：那边管软件版本与 CVE，这边管
+// IP / 域名 / URL / 哈希的外部观测。两者数据、页面、权限点都分开。
+//
+// 各源 API Key 用固定字段而不是 map：配置接口会对密钥字段做掩码，而掩码是
+// 按字段名精确匹配的，map 的键（源名）不在识别表里，会导致明文回显。
+// 没有 key 的源（internetdb / greynoise / otx / spamhaus_drop / feodo）
+// 照常可跑，这是"零门槛也能用"的底线。
+type ThreatIntelConfig struct {
+	Enabled          bool              `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	Proxy            string            `yaml:"proxy,omitempty" json:"proxy,omitempty"`                           // 出口代理（内网部署常用）
+	Timeout          string            `yaml:"timeout,omitempty" json:"timeout,omitempty"`                       // 单请求超时，默认 30s
+	FeedSyncInterval string            `yaml:"feed_sync_interval,omitempty" json:"feed_sync_interval,omitempty"` // 订阅源同步间隔，默认 6h
+	FeedTTLDays      int               `yaml:"feed_ttl_days,omitempty" json:"feed_ttl_days,omitempty"`           // 订阅条目保留天数，默认 90
+	CacheTTLSeconds  int               `yaml:"cache_ttl_seconds,omitempty" json:"cache_ttl_seconds,omitempty"`   // 查询缓存兜底 TTL，默认 3600
+	Endpoints        map[string]string `yaml:"endpoints,omitempty" json:"endpoints,omitempty"`                   // 源标识 -> 入口覆盖（内网镜像）
+	DisabledSources  []string          `yaml:"disabled_sources,omitempty" json:"disabled_sources,omitempty"`     // 显式停用的源
+
+	// 各源 API Key 用固定字段而不是 map：配置响应会把密钥字段统一掩码成
+	// `********`，而掩码是靠字段名识别的，map 的键（源名）不在识别表里，
+	// 用 map 会导致 Key 明文回显给所有能读配置的人。
+	AbuseIPDBKey  string `yaml:"abuseipdb_key,omitempty" json:"abuseipdb_key,omitempty"`
+	VirusTotalKey string `yaml:"virustotal_key,omitempty" json:"virustotal_key,omitempty"`
+	URLhausKey    string `yaml:"urlhaus_key,omitempty" json:"urlhaus_key,omitempty"`
+	ThreatFoxKey  string `yaml:"threatfox_key,omitempty" json:"threatfox_key,omitempty"`
+}
+
+// SourceKeys 把固定字段折成「源标识 -> Key」的映射，供 threatintel 包使用。
+// threatintel 直接认这个 map，是为了让新增源时只改配置结构，不改运行期接口。
+func (t ThreatIntelConfig) SourceKeys() map[string]string {
+	out := map[string]string{}
+	if v := strings.TrimSpace(t.AbuseIPDBKey); v != "" {
+		out["abuseipdb"] = v
+	}
+	if v := strings.TrimSpace(t.VirusTotalKey); v != "" {
+		out["virustotal"] = v
+	}
+	if v := strings.TrimSpace(t.URLhausKey); v != "" {
+		out["urlhaus"] = v
+	}
+	if v := strings.TrimSpace(t.ThreatFoxKey); v != "" {
+		out["threatfox"] = v
+	}
+	return out
+}
+
+// UnmarshalYAML 兼容早期写法 `threat_intel.keys: {abuseipdb: xxx}`。
+//
+// Key 从 map 改成固定字段是为了让配置接口能掩码；但旧配置里如果还留着 keys，
+// 严格按新结构解析会把它静默忽略——升级后 Key 全部失效却不报错。
+// 这里把旧 map 折进对应字段，固定字段优先（新写法覆盖旧写法）。
+func (t *ThreatIntelConfig) UnmarshalYAML(value *yaml.Node) error {
+	type plain ThreatIntelConfig
+	var decoded plain
+	if err := value.Decode(&decoded); err != nil {
+		return err
+	}
+	*t = ThreatIntelConfig(decoded)
+
+	var legacy struct {
+		Keys map[string]string `yaml:"keys"`
+	}
+	if err := value.Decode(&legacy); err != nil || len(legacy.Keys) == 0 {
+		return nil
+	}
+
+	// 判断四个固定字段在 YAML 里**是否出现过**：显式写成 `""`、`~` 或 `null`
+	// 都算出现过，不能用"值为空"或"指针为 nil"来判断——否则用户清空的 Key
+	// 会被旧 keys map 复活。按 YAML 键的存在性判断才没有歧义。
+	var present map[string]yaml.Node
+	_ = value.Decode(&present)
+	_, hasAbuse := present["abuseipdb_key"]
+	_, hasVT := present["virustotal_key"]
+	_, hasURLhaus := present["urlhaus_key"]
+	_, hasThreatFox := present["threatfox_key"]
+
+	// 旧 map 的键可能大小写不一致，按不区分大小写查找。
+	lookup := func(name string) string {
+		for k, v := range legacy.Keys {
+			if strings.EqualFold(strings.TrimSpace(k), name) {
+				return v
+			}
+		}
+		return ""
+	}
+	if !hasAbuse {
+		t.AbuseIPDBKey = lookup("abuseipdb")
+	}
+	if !hasVT {
+		t.VirusTotalKey = lookup("virustotal")
+	}
+	if !hasURLhaus {
+		t.URLhausKey = lookup("urlhaus")
+	}
+	if !hasThreatFox {
+		t.ThreatFoxKey = lookup("threatfox")
+	}
+	return nil
+}
+
+// ThreatIntelTimeout 解析单请求超时，非法值退回 30 秒。
+func (t ThreatIntelConfig) ThreatIntelTimeout() time.Duration {
+	if d, err := time.ParseDuration(strings.TrimSpace(t.Timeout)); err == nil && d >= time.Second {
+		return d
+	}
+	return 30 * time.Second
+}
+
+// ThreatIntelFeedInterval 解析订阅同步间隔，非法值退回 6 小时。
+func (t ThreatIntelConfig) ThreatIntelFeedInterval() time.Duration {
+	if d, err := time.ParseDuration(strings.TrimSpace(t.FeedSyncInterval)); err == nil && d >= time.Minute {
+		return d
+	}
+	return 6 * time.Hour
+}
+
+// ThreatIntelFeedTTL 解析订阅条目保留天数，非法值退回 90 天。
+func (t ThreatIntelConfig) ThreatIntelFeedTTL() time.Duration {
+	days := t.FeedTTLDays
+	if days <= 0 {
+		days = 90
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 // UpdateConfig 一键更新的更新源（可选）：一个仓库地址，更新跟随该仓库的默认分支。
